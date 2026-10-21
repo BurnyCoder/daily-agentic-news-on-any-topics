@@ -36,11 +36,12 @@ def test_results_and_run_listing(tmp_path: Path) -> None:
     """Results round-trip through JSON (+ CSV export) and runs are listed newest first."""
     for rid in ("20261021-100000", "20261022-090000"):
         store.write_json(tmp_path / rid / "status.json", {"run_id": rid})
+    store.write_json(tmp_path / "named" / "status.json", {"run_id": "named", "started": "2026-10-20T08:00:00"})
     rows = [{"topic": "Physics", "title": "T", "url": "https://x.org"}]
     store.save_results(tmp_path / "20261022-090000", rows)
     assert store.load_results(tmp_path / "20261022-090000") == rows
     assert (tmp_path / "20261022-090000" / "results.csv").exists()
-    assert store.list_runs(tmp_path) == ["20261022-090000", "20261021-100000"]
+    assert store.list_runs(tmp_path) == ["named", "20261022-090000", "20261021-100000"]  # start time first
     assert store.read_json(tmp_path / "missing.json", default=[]) == []  # missing file -> default
 
 
