@@ -63,8 +63,10 @@ def save_results(run_dir: Path, rows: list[dict]) -> None:
 
 
 def load_results(run_dir: Path) -> list[dict]:
-    """Rows saved by save_results (empty while a run is still going)."""
-    return read_json(run_dir / "results.json", default=[])
+    """Rows saved by save_results; while a run is still going, the items.json of agents already done."""
+    if (run_dir / "results.json").exists():
+        return read_json(run_dir / "results.json", default=[])
+    return [row for path in sorted(run_dir.glob("*/items.json")) for row in read_json(path, default=[])]
 
 
 def list_runs(runs_dir: Path) -> list[str]:
