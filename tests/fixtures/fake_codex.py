@@ -9,6 +9,7 @@ process-tree kill) for free; settings.codex_cmd points here instead of the real 
 """
 
 import json  # emit JSONL events and build the fake answer
+import re  # find the MODE=<name> marker
 import subprocess  # spawn a grandchild process in "hang" mode (to test process-tree kill)
 import sys  # argv, stdin/stdout/stderr
 import time  # sleep in "hang" mode
@@ -39,7 +40,8 @@ def main() -> int:
     prompt = sys.stdin.buffer.read().decode("utf-8")  # raw bytes: lets tests check byte-identical delivery
     cwd, out = Path(arg("--cd")), Path(arg("--output-last-message"))
     (cwd / "received_prompt.txt").write_bytes(prompt.encode("utf-8"))
-    mode = next((ln.split("=", 1)[1].strip() for ln in prompt.splitlines() if ln.startswith("MODE=")), "ok")
+    found = re.search(r"MODE=(\w+)", prompt)  # anywhere in the prompt, e.g. inside a topic name
+    mode = found.group(1) if found else "ok"
     if mode == "flaky":  # first call fails validation, second succeeds
         marker = cwd / "flaky_marker"
         mode = "ok" if marker.exists() else "bad_json"
