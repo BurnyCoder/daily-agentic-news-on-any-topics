@@ -51,21 +51,26 @@ def test_schema_is_valid_and_strict_compatible() -> None:
 
 
 def test_parse_final_adds_metadata_filters_and_flags_dates() -> None:
-    """Valid answers become rows; non-http links and duplicate URLs are dropped; dates are checked."""
+    """Valid answers become rows; non-http links and duplicate URLs are dropped; dates are checked/re-filed."""
     answer = {"coverage_notes": "no videos", "items": [
-        _item(),
-        _item(title="dup", url="https://arxiv.org/abs/2610.00001/"),  # same URL with trailing slash
+        _item(url="https://arxiv.org/abs/2610.00001?utm_source=x"),
+        _item(title="dup", url="https://arxiv.org/abs/2610.00001/"),  # same URL without tracking/with slash
         _item(url="javascript:alert(1)"),  # unsafe link
-        _item(interval="day", published="2020-01-01", url="https://example.org/old"),  # outside last day
+        _item(interval="day", published="2026-03-02", url="https://example.org/refile"),  # fits "year" instead
+        _item(interval="day", published="2020-01-01", url="https://example.org/old"),  # fits no selected interval
         _item(interval="year", published="2026-03", url="https://example.org/month"),  # month precision
         _item(published="unknown", url="https://example.org/unknown"),
     ]}
-    rows, notes = parse_final(json.dumps(answer), JOB, run_id="r1", today=TODAY)
+    seen = {"https://arxiv.org/abs/2610.00001", "https://example.org/month/"}  # URLs from search results
+    rows, notes = parse_final(json.dumps(answer), JOB, run_id="r1", today=TODAY, seen_urls=seen)
     assert notes == "no videos"
-    assert [r["url"] for r in rows] == ["https://arxiv.org/abs/2610.00001", "https://example.org/old",
-                                        "https://example.org/month", "https://example.org/unknown"]
+    assert [r["url"] for r in rows] == ["https://arxiv.org/abs/2610.00001?utm_source=x", "https://example.org/refile",
+                                        "https://example.org/old", "https://example.org/month",
+                                        "https://example.org/unknown"]
     assert rows[0]["topic"] == "Physics" and rows[0]["run_id"] == "r1"  # metadata added by Python
-    assert [r["in_interval"] for r in rows] == [True, False, True, None]  # date check per item
+    assert [r["interval"] for r in rows] == ["day", "year", "day", "year", "day"]  # mis-filed item moved to "year"
+    assert [r["in_interval"] for r in rows] == [True, True, False, True, None]  # date check per item
+    assert [r["url_seen"] for r in rows] == [True, False, False, True, False]  # link appeared in search results
 
 
 def test_parse_final_rejects_invalid_answers() -> None:

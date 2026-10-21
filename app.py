@@ -130,7 +130,8 @@ def render_results() -> None:
     df = pd.DataFrame(load_results(SETTINGS.runs_dir / run_id), columns=RESULT_COLUMNS)
     for dim, field in ITEM_FIELD.items():
         df[field] = df[field].map(LABELS[dim]).fillna(df[field])  # ids -> readable labels
-    df["in_interval"] = df["in_interval"].map({True: "yes", False: "no"}).fillna("unknown")
+    for flag in ("in_interval", "url_seen"):
+        df[flag] = df[flag].map({True: "yes", False: "no"}).fillna("unknown")  # tri-state for display
     filters = st.columns(6)
     for col, field in zip(filters, ["topic", *ITEM_FIELD.values()]):
         if chosen := col.multiselect(field.title(), sorted(df[field].dropna().unique())):
@@ -141,7 +142,9 @@ def render_results() -> None:
     st.caption(f"{len(df)} item(s)")
     st.dataframe(df.drop(columns=["run_id"]), hide_index=True,
                  column_config={"url": st.column_config.LinkColumn("Link", display_text="open"),
-                                "in_interval": st.column_config.TextColumn("Date in range")})
+                                "in_interval": st.column_config.TextColumn("Date in range"),
+                                "url_seen": st.column_config.TextColumn(
+                                    "Link from search", help="The link appeared in the agent's web search results")})
     st.download_button("Download CSV", df.to_csv(index=False).encode("utf-8"), file_name=f"news_{run_id}.csv")
     with st.expander("Coverage: items per topic x interval"):
         st.dataframe(pd.crosstab(df["topic"], df["interval"]) if len(df) else df)
