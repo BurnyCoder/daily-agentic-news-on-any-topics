@@ -70,10 +70,12 @@ def load_results(run_dir: Path) -> list[dict]:
 
 
 def list_runs(runs_dir: Path) -> list[str]:
-    """Run ids that have a status file, newest first."""
+    """Run ids that have a status file, newest first (by start time, then name; custom --run-id names allowed)."""
     if not runs_dir.exists():
         return []
-    return sorted((p.name for p in runs_dir.iterdir() if (p / "status.json").exists()), reverse=True)
+    runs = [p for p in runs_dir.iterdir() if (p / "status.json").exists()]
+    started = {p.name: (read_json(p / "status.json", default={}) or {}).get("started") or "" for p in runs}
+    return sorted(started, key=lambda name: (started[name], name), reverse=True)
 
 
 class StatusBoard:
