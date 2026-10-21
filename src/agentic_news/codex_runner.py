@@ -21,10 +21,10 @@ from pathlib import Path  # agent folders
 import psutil  # cross-platform process-tree kill
 
 from agentic_news.catalog import Job  # the topic assignment
-from agentic_news.events import describe_event, is_fatal_error  # log rendering + retry policy
+from agentic_news.events import describe_event, is_fatal_error, search_urls  # log, retry policy, searched URLs
 from agentic_news.schema import parse_final  # validation of the final JSON
 from agentic_news.settings import Settings  # flags, limits
-from agentic_news.store import StatusBoard, now  # live status
+from agentic_news.store import StatusBoard, now, write_json  # live status + per-agent items file
 
 log = logging.getLogger(__name__)
 
@@ -112,12 +112,12 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
         proc.stdin.close()
     except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
         log.warning("%s could not send prompt: %s", tag, exc)
-    last_message = ""
+    last_message, seen_urls = "", set()
     with open(spec.agent_dir / f"events_attempt{attempt}.jsonl", "w", encoding="utf-8") as raw:
         for line in proc.stdout:  # yields each JSONL line as soon as codex flushes it
             raw.write(line)
             raw.flush()
-            last_message = _handle_line(line, slug, tag, board) or last_message
+            last_message = _handle_line(line, slug, tag, board, seen_urls) or last_message
     proc.wait()
     timer.cancel()
     pump.join(timeout=5)
@@ -127,15 +127,15 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     answer = final_path.read_text(encoding="utf-8") if final_path.exists() else last_message
     log.info("%s exit code %s, final answer:\n%s", tag, proc.returncode, answer)
     try:
-        rows, notes = parse_final(answer, spec.job, spec.run_id, spec.today)
+        rows, notes = parse_final(answer, spec.job, spec.run_id, spec.today, seen_urls)
     except ValueError as exc:
         reason = board.data["agents"][slug]["error"] or " | ".join(stderr_tail) or str(exc)
         return AgentResult(spec.job, "failed", error=f"exit {proc.returncode}: {reason}", attempts=attempt)
     return AgentResult(spec.job, "done", items=rows, coverage_notes=notes, attempts=attempt)
 
 
-def _handle_line(line: str, slug: str, tag: str, board: StatusBoard) -> str | None:
-    """Log + count one stdout line; return the agent message text if the line carries one."""
+def _handle_line(line: str, slug: str, tag: str, board: StatusBoard, seen_urls: set[str]) -> str | None:
+    """Log + count one stdout line, collect searched URLs; return the agent message text if the line has one."""
     try:
         event = json.loads(line)
     except json.JSONDecodeError:
@@ -145,6 +145,7 @@ def _handle_line(line: str, slug: str, tag: str, board: StatusBoard) -> str | No
     if text:
         log.info("%s %s", tag, text)
     board.apply(slug, event, text)
+    seen_urls.update(search_urls(event))  # later marks which answer links really came from search
     item = event.get("item") or {}
     return item.get("text") if event.get("type") == "item.completed" and item.get("type") == "agent_message" else None
 
@@ -162,6 +163,7 @@ def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentR
     except Exception as exc:  # never let one agent crash the whole run
         log.exception("[%s] runner error", spec.job.slug)
         result = AgentResult(spec.job, "failed", error=repr(exc), attempts=result.attempts)
+    write_json(spec.agent_dir / "items.json", result.items)  # partial results for the dashboard mid-run
     board.update(spec.job.slug, state=result.state, ended=now(), items=len(result.items), error=result.error,
                  coverage_notes=result.coverage_notes)
     log.info("[%s] %s with %d items after %d attempt(s)", spec.job.slug, result.state, len(result.items),
