@@ -3,8 +3,9 @@
 Local: `build_output_schema` emits a schema in the subset accepted by OpenAI strict Structured Outputs
 (object root, every property required, `additionalProperties: false`, no length/format keywords —
 https://developers.openai.com/api/docs/guides/structured-outputs#supported-schemas); Codex exec sends it with
-strict=true. `parse_final` re-validates in Python (the model can still emit malformed JSON,
-https://github.com/openai/codex/issues/50127), drops unsafe links and duplicates, and adds metadata.
+strict=true. `parse_final` re-validates in Python (the fallback answer — the last agent_message, used when no
+-o file was written — is not guaranteed to match the schema), drops unsafe links and duplicates, re-files mis-dated items
+and adds metadata.
 Global context: rows returned here are what the dashboard's results table shows.
 """
 
