@@ -1,0 +1,13 @@
+{"type":"thread.started","thread_id":"01a160bd-9a62-78d3-8fc2-028d1e5366d7"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"web_search","id":"exec-1abddf69-777f-41df-ac4d-dc94f10b986d","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_0","type":"web_search","id":"exec-1abddf69-777f-41df-ac4d-dc94f10b986d","query":"https://news.ycombinator.com","action":{"type":"open_page","url":"https://news.ycombinator.com"},"results":[{"type":"text_result","domain":"news.ycombinator.com","ref_id":"turn0view0","snippet":"Total lines: 66","title":"Hacker News","url":"https://news.ycombinator.com/"}]}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\"title\":\"Railway Security Disclosure\",\"url\":\"https://blog.railway.com/p/vulnerability-disclosure\"}"}}
+{"type":"turn.completed","usage":{"input_tokens":36192,"cached_input_tokens":15872,"cache_write_input_tokens":0,"output_tokens":77,"reasoning_output_tokens":0}}
+{"type":"item.completed","item":{"id":"item_2","type":"reasoning","text":"Checking the HN front page for the top story."}}
+{"type":"item.started","item":{"id":"item_3","type":"command_execution","command":"curl -s https://example.org","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_3","type":"command_execution","command":"curl -s https://example.org","aggregated_output":"<html>ok</html>","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_4","type":"mcp_tool_call","server":"s","tool":"t","arguments":{},"status":"completed"}}
+{"type":"error","message":"stream disconnected before completion"}
+{"type":"turn.failed","error":{"message":"You've hit your usage limit."}}
+{"type":"some.future.event","x":1}
