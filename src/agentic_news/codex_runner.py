@@ -24,7 +24,7 @@ from agentic_news.catalog import Job  # the topic assignment
 from agentic_news.events import describe_event, is_fatal_error  # log rendering + retry policy
 from agentic_news.schema import parse_final  # validation of the final JSON
 from agentic_news.settings import Settings  # flags, limits
-from agentic_news.store import StatusBoard, now  # live status
+from agentic_news.store import StatusBoard, now, write_json  # live status + per-agent items file
 
 log = logging.getLogger(__name__)
 
@@ -162,6 +162,7 @@ def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentR
     except Exception as exc:  # never let one agent crash the whole run
         log.exception("[%s] runner error", spec.job.slug)
         result = AgentResult(spec.job, "failed", error=repr(exc), attempts=result.attempts)
+    write_json(spec.agent_dir / "items.json", result.items)  # partial results for the dashboard mid-run
     board.update(spec.job.slug, state=result.state, ended=now(), items=len(result.items), error=result.error,
                  coverage_notes=result.coverage_notes)
     log.info("[%s] %s with %d items after %d attempt(s)", spec.job.slug, result.state, len(result.items),
