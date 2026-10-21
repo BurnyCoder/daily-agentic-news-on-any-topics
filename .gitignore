@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local config with secrets/overrides — never pushed (see .env.example)
+.env
+
+# Runtime output: logs hold full prompts + web content, runs/ hold agent outputs, data/ holds the saved selection
+logs/
+runs/
+data/
+
+# Tool caches
+.pytest_cache/

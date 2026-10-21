@@ -1,0 +1,10 @@
+# Streamlit server config (https://docs.streamlit.io/develop/api-reference/configuration/config.toml).
+# Global context: topic text typed in the dashboard goes straight into prompts of unsandboxed Codex agents,
+# so the dashboard listens on localhost only — nobody else on the network can reach it.
+[server]
+address = "localhost"
+port = 8501
+headless = true
+
+[browser]
+gatherUsageStats = false

@@ -1,0 +1,38 @@
+[project]
+name = "agentic-news"
+version = "0.1.0"
+description = "Streamlit dashboard that launches one unsandboxed Codex CLI agent (GPT-6-Luna + live web search) per topic to collect top news, papers, books, videos and podcasts."
+readme = "README.md"
+authors = [
+    { name = "BurnyCoder", email = "happymancz@email.cz" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "jsonschema>=4.26.0",
+    "pandas>=3.0.6",
+    "psutil>=7.2.2",
+    "python-dotenv>=1.2.4",
+    "streamlit>=1.66.1",
+]
+
+[project.scripts]
+# Headless entry point: `uv run agentic-news run` (also what the dashboard launches in the background).
+agentic-news = "agentic_news.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Default run spends no tokens: `cli` checks the installed Codex CLI, `live` launches real agents.
+addopts = "-m 'not live and not cli'"
+markers = [
+    "cli: checks flags/features/models against the installed codex CLI (no tokens)",
+    "live: launches real Codex agents with web search (spends tokens)",
+]
