@@ -43,7 +43,7 @@ choice, keep the strongest items and spread coverage across intervals and types 
 {_option_lines(job, today)}
 
 ## Rules
-1. Use web search. Every url must be a page you actually found or opened in this session; never construct or guess URLs. Prefer the canonical page (arXiv abstract, publisher page, official video/podcast page, the original post).
+1. Use web search. Every url must be a page you actually found or opened in this session; never construct or guess URLs. Link the item itself, not an aggregator or daily digest: the news article, the arXiv abstract, the publisher's book page, the video or podcast episode page, the original post. The item must match its variant: a pop_sci item is itself accessible coverage (journalism, explainer), a rigorous item is itself a primary or technical source.
 2. Check each item's publication date against its interval's range. Write the date as YYYY-MM-DD, YYYY-MM or YYYY; write "unknown" only if no date can be found.
 3. Each item appears once, under the single best-fitting interval, type, source and variant.
 4. Empty cells are expected (for example a book that went viral on X in the last day rarely exists). Never pad with weak or invented items; list the empty cells in coverage_notes instead.
