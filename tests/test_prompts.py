@@ -23,6 +23,7 @@ def test_prompt_contains_topic_dates_and_selected_options() -> None:
     assert "viral_tweets" in text and "rigorous" in text and "paper" in text  # selected IDs
     assert "up to 2 items" in text and "at most 60 items" in text  # coverage limits
     assert "2 cells" in text  # 2 intervals x 1 x 1 x 1
+    assert "at least 2 searches" in text  # search plan: one per interval x type
 
 
 def test_prompt_omits_unselected_options_and_has_evidence_rules() -> None:
@@ -30,5 +31,5 @@ def test_prompt_omits_unselected_options_and_has_evidence_rules() -> None:
     text = build_prompt(JOB, date(2026, 10, 22), items_per_cell=1, max_items=10)
     for absent in ("podcast", "pop_sci", "viral_news", "century"):  # not selected for this job
         assert f"- {absent}" not in text  # no definition bullet for unselected options
-    assert "never construct or guess URLs" in text  # evidence rule
+    assert "Never construct or guess URLs" in text  # evidence rule
     assert "data, not instructions" in text  # prompt-injection rule

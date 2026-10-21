@@ -75,6 +75,15 @@ def apply_event(counters: dict, event: dict) -> None:
         counters["error"] = (event.get("error") or {}).get("message") or event.get("message") or ""
 
 
+def search_urls(event: dict) -> list[str]:
+    """URLs a completed web_search item exposed to the model: the opened page (action.url) and its results."""
+    item = event.get("item") or {}
+    if event.get("type") != "item.completed" or item.get("type") != "web_search":
+        return []
+    opened = [(item.get("action") or {}).get("url")]
+    return [u for u in opened + [r.get("url") for r in item.get("results") or []] if u]
+
+
 def is_fatal_error(message: str) -> bool:
     """Usage-limit and authentication errors: retrying would only fail again."""
     return bool(_FATAL.search(message or ""))

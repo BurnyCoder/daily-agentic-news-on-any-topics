@@ -20,7 +20,7 @@ from agentic_news.catalog import Job  # agents registered on the board
 from agentic_news.events import apply_event, new_counters  # per-event counter updates
 
 RESULT_COLUMNS = ["topic", "interval", "type", "source", "variant", "title", "url", "published", "creator",
-                  "summary", "why_notable", "in_interval", "run_id"]  # column order for the CSV and table
+                  "summary", "why_notable", "in_interval", "url_seen", "run_id"]  # column order for CSV and table
 
 
 def now() -> str:
@@ -63,15 +63,19 @@ def save_results(run_dir: Path, rows: list[dict]) -> None:
 
 
 def load_results(run_dir: Path) -> list[dict]:
-    """Rows saved by save_results (empty while a run is still going)."""
-    return read_json(run_dir / "results.json", default=[])
+    """Rows saved by save_results; while a run is still going, the items.json of agents already done."""
+    if (run_dir / "results.json").exists():
+        return read_json(run_dir / "results.json", default=[])
+    return [row for path in sorted(run_dir.glob("*/items.json")) for row in read_json(path, default=[])]
 
 
 def list_runs(runs_dir: Path) -> list[str]:
-    """Run ids that have a status file, newest first."""
+    """Run ids that have a status file, newest first (by start time, then name; custom --run-id names allowed)."""
     if not runs_dir.exists():
         return []
-    return sorted((p.name for p in runs_dir.iterdir() if (p / "status.json").exists()), reverse=True)
+    runs = [p for p in runs_dir.iterdir() if (p / "status.json").exists()]
+    started = {p.name: (read_json(p / "status.json", default={}) or {}).get("started") or "" for p in runs}
+    return sorted(started, key=lambda name: (started[name], name), reverse=True)
 
 
 class StatusBoard:
