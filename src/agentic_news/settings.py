@@ -29,7 +29,7 @@ class Settings:
     codex_reasoning_effort: str = "medium"  # gpt-6-luna supports low|medium|high|xhigh|max
     codex_reasoning_summary: str = "auto"  # makes reasoning summaries appear in the JSONL stream/logs
     codex_web_search: str = "live"  # https://learn.chatgpt.com/docs/config-file/config-basic.md
-    codex_ignore_user_config: bool = True  # skip ~/.codex/config.toml (MCP servers, hooks) for news agents
+    codex_ignore_user_config: bool = True  # skip ~/.codex/config.toml (e.g. MCP servers) for news agents
     codex_disable_features: tuple[str, ...] = (  # names from `codex features list`
         "plugins", "remote_plugin", "apps", "plugin_sharing", "tool_suggest", "multi_agent")
     max_parallel_agents: int = 6  # thread-pool size = concurrent Codex processes

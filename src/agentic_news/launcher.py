@@ -25,12 +25,14 @@ _GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "n
 def launch_run(rows: list[dict], settings: Settings) -> str:
     """Write the selection snapshot, start the CLI in the background, return the new run id."""
     run_id = new_run_id()
-    run_dir = settings.runs_dir / run_id
+    run_dir, status_path = settings.runs_dir / run_id, settings.runs_dir / run_id / "status.json"
     write_json(run_dir / "selection.json", rows)  # the CLI reads this snapshot first
+    starting = {"run_id": run_id, "state": "starting", "pid": None, "started": now(), "ended": None, "agents": {}}
+    write_json(status_path, starting)  # visible at once; the run's StatusBoard replaces it
     proc = subprocess.Popen([sys.executable, "-m", "agentic_news.cli", "run", "--run-id", run_id],
                             cwd=PROJECT_ROOT, stdin=subprocess.DEVNULL, **_GROUP)
-    write_json(run_dir / "status.json", {"run_id": run_id, "state": "starting", "pid": proc.pid,
-                                         "started": now(), "ended": None, "agents": {}})  # replaced by the run
+    if (read_json(status_path, default={}) or {}).get("state") == "starting":  # never overwrite the run's own status
+        write_json(status_path, {**starting, "pid": proc.pid})
     return run_id
 
 
