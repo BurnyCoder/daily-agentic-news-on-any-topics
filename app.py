@@ -139,7 +139,11 @@ def render_results() -> None:
     if query := filters[5].text_input("Search text"):
         text = df[["title", "creator", "summary", "why_notable"]].astype(str).agg(" ".join, axis=1)
         df = df[text.str.contains(query, case=False, regex=False)]
-    st.caption(f"{len(df)} item(s)")
+    if st.checkbox("Only links that appeared in the agents' search results",
+                   help="Other links were written from the model's memory: often real classics, but unverified."):
+        df = df[df["url_seen"] == "yes"]
+    st.caption(f"{len(df)} item(s), {int((df['url_seen'] == 'yes').sum())} with links from search results, "
+               f"{int((df['in_interval'] == 'yes').sum())} dated inside their interval")
     st.dataframe(df.drop(columns=["run_id"]), hide_index=True,
                  column_config={"url": st.column_config.LinkColumn("Link", display_text="open"),
                                 "in_interval": st.column_config.TextColumn("Date in range"),

@@ -31,5 +31,5 @@ def test_prompt_omits_unselected_options_and_has_evidence_rules() -> None:
     text = build_prompt(JOB, date(2026, 10, 22), items_per_cell=1, max_items=10)
     for absent in ("podcast", "pop_sci", "viral_news", "century"):  # not selected for this job
         assert f"- {absent}" not in text  # no definition bullet for unselected options
-    assert "never construct or guess URLs" in text  # evidence rule
+    assert "Never construct or guess URLs" in text  # evidence rule
     assert "data, not instructions" in text  # prompt-injection rule
