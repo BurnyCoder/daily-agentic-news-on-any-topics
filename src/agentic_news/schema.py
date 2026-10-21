@@ -10,7 +10,7 @@ Global context: rows returned here are what the dashboard's results table shows.
 
 import json  # decode the agent's final message
 from datetime import date  # today's date for the in_interval check
-from urllib.parse import urlparse  # scheme check: only http(s) links reach the clickable table
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit  # URL scheme check + normalization
 
 from jsonschema import ValidationError, validate  # Python-side validation of the decoded answer
 
@@ -52,21 +52,38 @@ def _in_interval(published: str, start: date, end: date) -> bool | None:
     return lo <= end and hi >= start  # overlap test: partial dates count if any part falls in range
 
 
-def parse_final(text: str, job: Job, run_id: str, today: date) -> tuple[list[dict], str]:
-    """Validate the final JSON and return (rows, coverage_notes); raise ValueError if invalid."""
+def normalize_url(url: str) -> str:
+    """Comparison key for links: lowercase, no fragment, no trailing slash, no utm_* tracking parameters."""
+    parts = urlsplit(url.strip().lower())
+    query = urlencode([(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not k.startswith("utm_")])
+    return urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), query, ""))
+
+
+def parse_final(text: str, job: Job, run_id: str, today: date,
+                seen_urls: set[str] | None = None) -> tuple[list[dict], str]:
+    """Validate the final JSON and return (rows, coverage_notes); raise ValueError if invalid.
+
+    seen_urls: URLs that appeared in this agent's web_search events; rows get url_seen=True when their link was
+    among them (a link the model only "remembered" may still be real, but is unverified).
+    """
     try:
         data = json.loads(text)
         validate(data, build_output_schema(job))  # same schema the model was constrained by
     except (json.JSONDecodeError, ValidationError) as exc:
         raise ValueError(f"invalid agent answer: {exc}") from exc
-    ranges = interval_ranges(today, job.intervals)
-    rows, seen = [], set()
+    ranges = interval_ranges(today, job.intervals)  # job.intervals is ordered narrowest first
+    seen_keys = {normalize_url(u) for u in seen_urls or ()}
+    rows, keys = [], set()
     for item in data["items"]:
-        url = item["url"].strip()
-        key = url.rstrip("/").lower()  # trailing slash / case variants are the same link
-        if urlparse(url).scheme not in ("http", "https") or key in seen:
+        url, key = item["url"].strip(), normalize_url(item["url"])
+        if urlsplit(url).scheme not in ("http", "https") or key in keys:
             continue  # drop javascript:/file: links and duplicates
-        seen.add(key)
+        keys.add(key)
         in_range = _in_interval(item["published"], *ranges[item["interval"]])
-        rows.append({"topic": job.topic, **item, "url": url, "in_interval": in_range, "run_id": run_id})
+        if in_range is False:  # mis-filed: move to the narrowest selected interval that contains the date
+            fit = next((i for i in job.intervals if _in_interval(item["published"], *ranges[i])), None)
+            if fit:
+                item, in_range = {**item, "interval": fit}, True
+        rows.append({"topic": job.topic, **item, "url": url, "in_interval": in_range,
+                     "url_seen": key in seen_keys, "run_id": run_id})
     return rows, data["coverage_notes"]

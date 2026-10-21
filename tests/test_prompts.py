@@ -23,6 +23,7 @@ def test_prompt_contains_topic_dates_and_selected_options() -> None:
     assert "viral_tweets" in text and "rigorous" in text and "paper" in text  # selected IDs
     assert "up to 2 items" in text and "at most 60 items" in text  # coverage limits
     assert "2 cells" in text  # 2 intervals x 1 x 1 x 1
+    assert "at least 2 searches" in text  # search plan: one per interval x type
 
 
 def test_prompt_omits_unselected_options_and_has_evidence_rules() -> None:

@@ -42,6 +42,11 @@ choice, keep the strongest items and spread coverage across intervals and types 
 
 {_option_lines(job, today)}
 
+## How to search
+Work systematically. For every selected interval, run separate searches for every selected type
+(at least {len(job.intervals) * len(job.types)} searches in total), each aimed at the selected sources' popularity
+signals and both variants. Only after every interval x type has been searched, write the final answer.
+
 ## Rules
 1. Use web search. Every url must be a page you actually found or opened in this session; never construct or guess URLs. Link the item itself, not an aggregator or daily digest: the news article, the arXiv abstract, the publisher's book page, the video or podcast episode page, the original post. The item must match its variant: a pop_sci item is itself accessible coverage (journalism, explainer), a rigorous item is itself a primary or technical source.
 2. Check each item's publication date against its interval's range. Write the date as YYYY-MM-DD, YYYY-MM or YYYY; write "unknown" only if no date can be found.

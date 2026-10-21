@@ -55,6 +55,7 @@ def test_successful_agent(tmp_path: Path) -> None:
     board = StatusBoard(tmp_path / "status.json", "r1", [spec.job])
     result = run_agent(spec, FAST, board)
     assert result.state == "done" and result.items[0]["topic"] == "Physics" and result.coverage_notes == "fake notes"
+    assert result.items[0]["url_seen"] is True  # the fake's search results contained the answer's link
     assert (spec.agent_dir / "received_prompt.txt").read_bytes() == spec.prompt.encode("utf-8")
     raw = (spec.agent_dir / "events_attempt1.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(raw) == 5 and json.loads(raw[0])["type"] == "thread.started"  # every line kept raw

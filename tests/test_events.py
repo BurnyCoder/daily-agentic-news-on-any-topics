@@ -8,7 +8,7 @@ Global context: fixtures/events_sample.jsonl starts with a real event stream cap
 import json  # decode fixture lines
 from pathlib import Path  # fixture location
 
-from agentic_news.events import apply_event, describe_event, is_fatal_error, new_counters  # under test
+from agentic_news.events import apply_event, describe_event, is_fatal_error, new_counters, search_urls  # under test
 
 EVENTS = [json.loads(line) for line in (Path(__file__).parent / "fixtures" / "events_sample.jsonl")
           .read_text(encoding="utf-8").splitlines()]
@@ -31,6 +31,12 @@ def test_long_text_is_not_truncated() -> None:
     big = "y" * 100_000
     out = describe_event({"type": "item.completed", "item": {"type": "agent_message", "text": big}})
     assert out is not None and big in out
+
+
+def test_search_urls_collects_opened_pages_and_results() -> None:
+    """URLs come from completed web_search items: the opened page and every result."""
+    urls = [u for e in EVENTS for u in search_urls(e)]
+    assert urls == ["https://news.ycombinator.com", "https://news.ycombinator.com/"]  # action.url + results[].url
 
 
 def test_counters_and_fatal_errors() -> None:

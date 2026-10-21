@@ -20,7 +20,7 @@ from agentic_news.catalog import Job  # agents registered on the board
 from agentic_news.events import apply_event, new_counters  # per-event counter updates
 
 RESULT_COLUMNS = ["topic", "interval", "type", "source", "variant", "title", "url", "published", "creator",
-                  "summary", "why_notable", "in_interval", "run_id"]  # column order for the CSV and table
+                  "summary", "why_notable", "in_interval", "url_seen", "run_id"]  # column order for CSV and table
 
 
 def now() -> str:

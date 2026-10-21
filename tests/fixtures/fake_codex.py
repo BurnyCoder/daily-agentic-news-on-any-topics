@@ -60,7 +60,8 @@ def main() -> int:
         print(f"fatal: {msg}", file=sys.stderr, flush=True)
         return 1
     emit({"type": "item.completed", "item": {"id": "item_0", "type": "web_search", "query": "fake query",
-                                             "action": {"type": "search", "query": "fake query"}}})
+                                             "action": {"type": "search", "query": "fake query"},
+                                             "results": [{"title": "Fake", "url": "https://example.org/fake"}]}})
     text = "not json" if mode == "bad_json" else answer_from_schema(arg("--output-schema"))
     emit({"type": "item.completed", "item": {"id": "item_1", "type": "agent_message", "text": text}})
     emit({"type": "turn.completed", "usage": {"input_tokens": 10, "output_tokens": 5}})
