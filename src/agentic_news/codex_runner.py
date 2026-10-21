@@ -62,7 +62,7 @@ def build_command(settings: Settings, agent_dir: Path) -> list[str]:
            "--dangerously-bypass-approvals-and-sandbox",  # user's choice: no sandbox, no approvals
            "--ephemeral", "--skip-git-repo-check"]  # no session files; agent folders aren't repos
     if settings.codex_ignore_user_config:
-        cmd.append("--ignore-user-config")  # keep personal MCP servers/hooks out of the news agents
+        cmd.append("--ignore-user-config")  # don't load ~/.codex/config.toml (e.g. personal MCP servers)
     for feature in settings.codex_disable_features:
         cmd += ["--disable", feature]
     return cmd + ["--cd", str(agent_dir), "--output-schema", str(agent_dir / "schema.json"),
