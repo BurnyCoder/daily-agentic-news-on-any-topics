@@ -3,8 +3,10 @@
 Local: event types are thread.started, turn.started, turn.completed{usage}, turn.failed{error}, error{message}
 and item.started/updated/completed{item}; item types include agent_message, reasoning, web_search
 (query, action, results), command_execution (command, aggregated_output, exit_code), mcp_tool_call, ...
-(https://learn.chatgpt.com/docs/non-interactive-mode; shapes checked against a real codex-cli 0.163.0 stream in
-tests/fixtures/events_sample.jsonl). Unknown events are dumped as JSON instead of being dropped.
+(https://learn.chatgpt.com/docs/non-interactive-mode names them in prose; exact names in
+https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/exec_events.rs; shapes checked against a
+real codex-cli 0.163.0 stream in tests/fixtures/events_sample.jsonl). Unknown events are dumped as JSON instead
+of being dropped.
 Global context: codex_runner logs `describe_event` output for every line and feeds `apply_event` into the
 StatusBoard that the dashboard polls. Raw lines are also kept unmodified in events_attempt<N>.jsonl.
 """

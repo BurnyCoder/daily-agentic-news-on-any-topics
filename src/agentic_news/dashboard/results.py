@@ -82,7 +82,7 @@ def render_results(settings: Settings) -> None:
         text = df[["title", "creator", "summary", "why_notable"]].astype(str).agg(" ".join, axis=1)
         df = df[text.str.contains(query, case=False, regex=False)]
     if st.checkbox("Only links that appeared in the agents' search results", key="filter_seen",
-                   help="Other links were written from the model's memory: often real classics, but unverified."):
+                   help="Other links were recalled by the model or copied from page text: unverified."):
         df = df[df["url_seen"] == "yes"]
 
     label_of = {d.key: d.label for d in dims}
@@ -115,7 +115,8 @@ def render_results(settings: Settings) -> None:
                  column_config={"url": st.column_config.LinkColumn("Link", display_text="open"),
                                 "in_interval": st.column_config.TextColumn("Date in range"),
                                 "url_seen": st.column_config.TextColumn(
-                                    "Link from search", help="The link appeared in the agent's web search results")})
+                                    "Link from search",
+                                    help="The link appeared in the agent's web search results or opened pages")})
     st.download_button("Download CSV", df.to_csv(index=False).encode("utf-8"), file_name=f"news_{run_id}.csv")
     with st.expander("Agents' coverage notes"):
         for agent in (read_json(run_dir / "status.json", default={}) or {}).get("agents", {}).values():

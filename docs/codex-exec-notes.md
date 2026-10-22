@@ -1,7 +1,8 @@
 # Codex CLI notes and live-run findings
 
 Everything here was checked against **codex-cli 0.163.0** on Windows 11 (October 2026). `uv run pytest -m cli`
-re-checks the flag, feature and model names against whatever Codex version is installed.
+re-checks the flag, feature and model names against whatever Codex version is installed. Run numbers come from
+the local, git-ignored `runs/<id>/` and `logs/` folders, except the two live tests (see below).
 
 ## The command each agent runs
 
@@ -29,25 +30,31 @@ codex exec --json --color never --model gpt-6-luna
 | `--output-schema` | strict JSON answer; Codex applies it to **every** agent message, not just the last ([openai/codex#19816](https://github.com/openai/codex/issues/19816)), hence the prompt's "no progress messages" rule |
 | `-o` + trailing `-` | final answer in a file; prompt read from stdin (avoids Windows quoting and command-line length limits) |
 
-All `-c` keys were also accepted with `--strict-config` in a probe run.
+All `-c` keys above pass `--strict-config`, which does check `-c` overrides: a made-up key fails with
+"unknown configuration field `bogus_key_xyz` in -c/--config override".
 
 ## Event stream (real sample)
 
-The first lines of [tests/fixtures/events_sample.jsonl](../tests/fixtures/events_sample.jsonl) are an unedited
-gpt-6-luna stream:
+The first 6 lines of [tests/fixtures/events_sample.jsonl](../tests/fixtures/events_sample.jsonl) are an unedited
+gpt-6-luna stream; the remaining lines are synthetic edge cases. The docs name the events in prose; the exact
+field names are in [codex-rs/exec/src/exec_events.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/exec_events.rs).
+Shapes seen in the fixture and in `runs/*/*/events_attempt*.jsonl`:
 
 - `thread.started {thread_id}` → `turn.started`
 - `item.started` / `item.completed` with `item.type = "web_search"`:
   - `query`
-  - `action` = `{type: "search", queries:[...]}` or `{type: "open_page", url}`
-  - `results` = `[{title, url, domain, snippet}]`
+  - `action` = `{type: "search", queries:[...]}`, `{type: "open_page", url}` or `{type: "other"}`
+  - `results` = `[{type, title, url, domain, snippet, ref_id}]`
 - `item.completed` with `item.type = "agent_message"` and `text` (the JSON answer)
 - `turn.completed` with `usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`,
   `output_tokens`, `reasoning_output_tokens`
 
-One web_search call usually bundles several queries. With `model_reasoning_summary="auto"`, `reasoning`
-items are short headings such as `**Preparing 30 search queries**`. There were 0–4 per agent at `medium` and
-12 at `high`; they are logged like every other event.
+One web_search call usually bundles several queries. gpt-6-luna's catalog entry has
+`default_reasoning_summary: "none"` (`codex debug models`), and Codex drops reasoning items with empty text
+([event_processor_with_jsonl_output.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/event_processor_with_jsonl_output.rs)),
+hence `model_reasoning_summary="auto"`. The `reasoning` items are then short headings such as
+`**Preparing 30 search queries**`. There were 0–6 per agent at `medium` and 12 in the one `high` run; they are
+logged like every other event.
 
 ## Live runs, first version: one agent per topic
 
@@ -56,8 +63,9 @@ Setup for every run:
 - `ITEMS_PER_CELL=2`, `MAX_ITEMS_PER_AGENT=60`
 - data comes from `runs/<id>/status.json`, `events_attempt1.jsonl` and `items.json`
 
-Each configuration ran once, so differences between rows are indicative only; they are not statistically
-tested.
+Each configuration ran once, except run 5's prompt on Pure math, which ran twice (5 and 5b: 13 vs 15 items,
+8 vs 11 links from search). That replicate is the only measure of run-to-run noise, and it is as large as most
+differences between rows, so the differences are indicative only; none is statistically tested.
 
 **Pure math**
 
@@ -65,9 +73,10 @@ tested.
 |---|---|---|---|---|---|---|
 | 1 `20261022-012502` | baseline prompt | medium | 5 / 20 | 9 | 9 | 6 |
 | 2 `20261022-012857` | + search plan, re-filing, `url_seen` | medium | 4 / 16 | 16 | 13 | 15 |
-| 3 `effort-high-puremath` | same prompt as run 2 | **high** | 12 / 42 | 4 | 4 | 4 |
+| 3 `effort-high-puremath` | same prompt as run 2 | **high** | 12 / 40 | 4 | 4 | 4 |
 | 4 `relaxed-puremath` | relaxed evidence rules | medium | 4 / 68 | 17 | 12 | 17 |
 | 5 `verify-three` | + "open unknown URLs first" | medium | 10 / 38 | 13 | 8 | 11 |
+| 5b `20261022-014742` | same prompt as run 5 (repeat) | medium | 7 / 28 | 15 | 11 | 15 |
 
 **Mechanistic interpretability**
 
@@ -79,31 +88,43 @@ tested.
 
 **AI governance** (run 5 only): 2 calls / 8 queries, 24 items, 18 links from search, 24 dated in interval.
 
-**Durations:** 41–79 s per run; agents ran in parallel. **Input tokens:** 76k–749k per agent (run 3: 749k, of
-which 657k cached). Run 1's links-from-search counts were computed afterwards from its event files, because the
-flag did not exist yet.
+Calls count every completed `web_search` item; queries count the search queries inside them (run 3's 12 calls
+include 2 of type `other` with no query). **Durations:** 41–79 s per run; agents ran in parallel. **Input
+tokens:** 76k–749k per agent (run 3: 749k, of which 657k cached). Run 1's links-from-search counts were computed
+afterwards from its event files, because the flag did not exist yet.
 
 ### What we learned and what changed
 
-1. **Thin coverage.** One agent with 240 cells returned 9–23 items after about 5 search calls. The model ignored
-   "at least N searches" (run 2).
-2. **Higher effort made it stricter, not broader** (run 3).
-   - It made 3× the search calls but returned 4 items.
-   - Its coverage notes said it rejected candidates whose virality or date "could not be verified".
+1. **Thin coverage.** In runs 1–2, one agent with 240 cells returned 9–23 items after 4–6 search calls. Run 2's
+   prompt asked for "at least 30 searches in total"; its agents ran 16 and 23 queries.
+2. **Higher effort made it stricter, not broader** (run 3, a single run).
+   - It made 3× the search calls of run 2 (12 vs 4) but returned 4 items instead of 16.
+   - Its coverage notes said candidates were left out when their dates or virality "could not be verified".
    - So the default stays `medium`.
-3. **Relaxing the evidence rule raised recall but let a placeholder through** (run 4).
+3. **Relaxing the evidence rule did not clearly change coverage, and let a placeholder through** (run 4).
    - The new rule: fill every real cell, and influence counts as notability for the 10/100-year intervals.
-   - Recall rose (17 items, 68 queries).
-   - But one link was the placeholder `https://www.youtube.com/watch?v=REPLACE`. The `url_seen` flag marked it,
+   - Against run 2 (same effort): 16 → 17 items, 13 → 12 links from search, 15 → 17 dated in interval, while
+     queries rose 16 → 68. These differences are within the run 5/5b noise.
+   - One link was the placeholder `https://www.youtube.com/watch?v=REPLACE`. The `url_seen` flag marked it,
      because it never appeared in a search result.
-4. **The model does not open pages it remembers** (run 5).
+4. **The model does not open pages it remembers** (runs 5 and 5b).
    - Even when told to open unknown URLs first, it made 0 `open_page` calls.
-   - Links not from search are mostly real classics recalled from training: *As We May Think* (1945), the Moral
-     Machine paper (Nature 2018), *Toy Models of Superposition*.
-   - A few are doubtful: an X post ID, and a YouTube *search page* instead of a video.
+   - No run executed a shell command, so links not from search were recalled from training or copied from
+     search-result text. Many are well-known older works: *As We May Think* (1945), *Toy Models of
+     Superposition*, *In-context Learning and Induction Heads*.
+   - Others are doubtful or wrong:
+     - two X post links (not checked);
+     - a YouTube *search page* instead of a video;
+     - a fabricated citation: "The ethics of artificial intelligence: Mapping the debate" (Brent Mittelstadt,
+       "Nature Machine Intelligence", 2018) at `nature.com/articles/s41586-018-0633-y`. That DOI does not resolve
+       ([doi.org](https://doi.org/api/handles/10.1038/s41586-018-0633-y) and
+       [Crossref](https://api.crossref.org/works/10.1038/s41586-018-0633-y) return 404), and the journal's first
+       article appeared on 2019-01-07 ([Crossref, ISSN 2522-5839](https://api.crossref.org/journals/2522-5839/works?sort=published&order=asc&rows=1)).
+       The model mixed it up with "The ethics of algorithms: Mapping the debate" (Mittelstadt et al., Big Data &
+       Society, 2016, [doi:10.1177/2053951716679679](https://doi.org/10.1177/2053951716679679)).
    - So these links stay in the table, flagged. The dashboard has an "Only links from search results" filter.
 5. **Interval mistakes are common** (run 1: 16/23 and 6/9 dated inside their interval).
-   - Python now moves a mis-dated item to the narrowest selected interval that contains its date (runs 2–5).
+   - Python now moves a mis-dated item to the narrowest selected interval that contains its date (runs 2–5b).
    - Items that fit no selected interval stay flagged. Example: the model files Riemann's 1859 paper under
      "last 100 years".
 
@@ -116,7 +137,9 @@ is now one agent per cell, and any dimensions can be merged into one agent. Live
 Each configuration ran once:
 - **Cell:** AI industry × Articles × Viral news × Pop sci, plus the interval or region shown.
 - **Limit:** `ITEMS_PER_CELL=1`.
-- **Data:** from `status.json` and `results.json`.
+- **Data:** from `status.json` and `results.json`. Live tests A and B ran in pytest temp folders that were not
+  kept, so their numbers come from the terminal log of `uv run pytest -m live -s`; the dashboard runs are in
+  `runs/`.
 
 | Run | Cells | Merge | Agents | Wall time | Searches per agent | Items | Dated in interval / from search | Off-grid dropped |
 |---|---|---|---|---|---|---|---|---|
@@ -125,9 +148,10 @@ Each configuration ran once:
 | dashboard `20261022-023715` | last week × Region {Europe, USA} (user-added dimension) | none | 2 (parallel) | 18 s | 2, 2 | 4 | 4/4, 4/4 | 0 |
 
 **Input tokens:**
-- A one-cell agent used 73–77k input tokens (73,095; 77,430; 73,390; 75,427).
-- The merged 2-cell agent used 108,447.
-- So merging 2 cells cost about 1.4× one cell, while splitting cost 2×.
+- A one-cell agent used 73–77k input tokens (live test A: 73,095 and 77,430; Region run: 73,390 and 75,427).
+- 2-cell agents used 108,447 (live test B, interval merged), 119,269 and 262,613 (run `20261022-030136` below,
+  type merged): 1.4–3.5× a one-cell agent, while splitting 2 cells costs 2×.
+- With 3 merged agents the saving is not reliable: the 263k agent cost more than two one-cell agents.
 
 **The Region run:**
 - The Europe agent searched with the region in its queries ("AI industry Europe October 2026 …").
@@ -160,13 +184,15 @@ Each configuration ran once:
     fixed key: when the dimensions change it resets to "every dimension except the first".
 
 A merged run checked through the UI: 4 cells (last day/last week × papers/articles) with *Type* merged gave
-2 agents of 2 cells each, in 44 s, with 6 items and 0 dropped (run `20261022-030136`). It also showed the
-following:
+2 agents of 2 cells each, in 44 s, with 6 items and 0 dropped (run `20261022-030136`). Unlike the 2-cell
+tests, not every item was clean: 4/6 links came from search (both AP News articles in the "last day" cell did
+not) and 5/6 were dated inside their interval. It also showed the following:
 - a renamed dimension key (`variant` → `level`) flows into the prompts and results;
 - `results.csv` carries `*_label` columns;
 - a paper dated one day before "last day" was flagged out of range rather than moved into the other agent's
   "last week" cell.
 
 Open levers, not implemented:
-- resume the Codex session to fill empty cells (`codex exec resume`);
+- resume the Codex session to fill empty cells (`codex exec resume`; it needs session files, so `--ephemeral`
+  would have to go);
 - a stronger model (`CODEX_MODEL`, or per run in the dashboard).
