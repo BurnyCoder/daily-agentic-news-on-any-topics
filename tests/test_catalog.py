@@ -16,8 +16,10 @@ from agentic_news.catalog import (  # module under test
     default_rules,
     expand_rules,
     interval_ranges,
+    rename_keys,
     slugify,
     sync_rules,
+    unique_name,
     validate_dimensions,
 )
 
@@ -105,3 +107,12 @@ def test_custom_dimension_and_interval_ranges() -> None:
     assert interval_ranges(date(2026, 10, 22), custom, ("fortnight",)) == {
         "fortnight": (date(2026, 10, 8), date(2026, 10, 22))}
     assert slugify("AI & Math!") == "ai-math"
+
+
+def test_unique_names_and_key_renames() -> None:
+    """Names get numeric suffixes until free; renaming a dimension key carries rules and merge along."""
+    assert unique_name("eu", set()) == "eu" and unique_name("eu", {"eu", "eu-2"}) == "eu-3"
+    assert unique_name("region", {"region"}, sep="_") == "region_2"
+    rules, merge = rename_keys([_rule(variant=["pop_sci"])], ["variant", "type"], {"variant": "level"})
+    assert rules[0]["level"] == ["pop_sci"] and "variant" not in rules[0] and merge == ["level", "type"]
+    assert validate_dimensions([replace(DIMS[0], key="topic_label")])  # would collide with the label column

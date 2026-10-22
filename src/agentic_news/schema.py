@@ -31,8 +31,8 @@ META_FIELDS = ["in_interval", "url_seen", "agent", "run_id"]  # added by Python,
 
 
 def result_columns(dims: list[Dimension]) -> list[str]:
-    """Column order of results.json/.csv: one column per dimension, then item text, then metadata."""
-    return [d.key for d in dims] + list(TEXT_FIELDS) + META_FIELDS
+    """Column order of results.json/.csv: dimension ids, their readable labels, item text, metadata."""
+    return [d.key for d in dims] + [f"{d.key}_label" for d in dims] + list(TEXT_FIELDS) + META_FIELDS
 
 
 def build_output_schema(job: Job, dims: list[Dimension]) -> dict:
@@ -110,6 +110,8 @@ def parse_final(text: str, job: Job, dims: list[Dimension], run_id: str, today: 
             dropped += 1  # a combination this agent was not asked for
             continue
         keys.add(key)
-        rows.append({**dict(zip([d.key for d in dims], cell)), **{f: item[f] for f in TEXT_FIELDS}, "url": url,
+        rows.append({**dict(zip([d.key for d in dims], cell)),
+                     **{f"{d.key}_label": d.option(v).label for d, v in zip(dims, cell)},  # readable in the CSV
+                     **{f: item[f] for f in TEXT_FIELDS}, "url": url,
                      "in_interval": in_range, "url_seen": key in seen_keys, "agent": job.slug, "run_id": run_id})
     return rows, data["coverage_notes"], dropped
