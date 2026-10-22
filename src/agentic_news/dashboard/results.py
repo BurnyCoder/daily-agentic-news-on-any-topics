@@ -11,7 +11,7 @@ import numpy as np  # boolean masks
 import pandas as pd  # tables and pivot
 import streamlit as st  # UI
 
-from agentic_news.catalog import default_dimensions, expand_rules  # dimensions + selected cells
+from agentic_news.catalog import Dimension, default_dimensions, expand_rules  # dimensions + selected cells
 from agentic_news.config import config_from_dict  # run snapshot
 from agentic_news.dashboard.state import labels  # id -> label
 from agentic_news.schema import result_columns  # column order
@@ -26,6 +26,14 @@ def _match(df: pd.DataFrame, keys: list[str], values: tuple) -> np.ndarray:
     return np.logical_and.reduce([df[k].to_numpy() == v for k, v in zip(keys, values)] or [np.ones(len(df), bool)])
 
 
+def _ordered(series: pd.Series, dim: Dimension) -> pd.Categorical:
+    """Ids -> labels as an ordered categorical in the dimension's entry order (legacy unknown values appended)."""
+    values = series.map(labels(dim)).fillna(series)
+    order = [o.label for o in dim.options]
+    return pd.Categorical(values, categories=order + [v for v in pd.unique(values.dropna()) if v not in order],
+                          ordered=True)
+
+
 def _flat(labels_: pd.Index) -> list[tuple]:
     """Index entries as tuples (MultiIndex or plain)."""
     return [t if isinstance(t, tuple) else (t,) for t in labels_]
@@ -33,10 +41,11 @@ def _flat(labels_: pd.Index) -> list[tuple]:
 
 def _pivot(df: pd.DataFrame, cells: pd.DataFrame, keys: list[str], rows: list[str], cols: list[str]):
     """Item counts per (row, column) over all selected cells; returns (grid, row tuples, column tuples by name)."""
-    counts = df.groupby(keys).size().rename("items").reset_index() if len(df) else pd.DataFrame(columns=[*keys, "items"])
+    counts = (df.groupby(keys, observed=True).size().rename("items").reset_index() if len(df)
+              else pd.DataFrame(columns=[*keys, "items"]))
     merged = cells.merge(counts, on=keys, how="left").fillna({"items": 0}).assign(**{ALL_ROWS: "all", ALL_COLS: "items"})
     grid = merged.pivot_table(index=rows or [ALL_ROWS], columns=cols or [ALL_COLS], values="items",
-                              aggfunc="sum", fill_value=0).astype(int)
+                              aggfunc="sum", fill_value=0, observed=True).astype(int)  # categorical: entry order
     row_tuples, col_tuples = _flat(grid.index), _flat(grid.columns)
     names = [" · ".join(map(str, t)) for t in col_tuples]
     grid.index, grid.columns = [" · ".join(map(str, t)) for t in row_tuples], names
@@ -48,6 +57,8 @@ def render_results(settings: Settings) -> None:
     runs = list_runs(settings.runs_dir)
     if not runs:
         return
+    if st.session_state.get("newest_run") != runs[0]:  # a new run appeared: show it
+        st.session_state.newest_run = st.session_state.results_run = runs[0]
     run_id = st.selectbox("Run", runs, key="results_run")
     run_dir = settings.runs_dir / run_id
     snapshot = read_json(run_dir / "config.json")
@@ -56,15 +67,15 @@ def render_results(settings: Settings) -> None:
     keys = [d.key for d in dims]
     df = pd.DataFrame(load_results(run_dir), columns=result_columns(dims))
     cells = pd.DataFrame(expand_rules(cfg.rules, dims) if cfg else df[keys].drop_duplicates(), columns=keys)
-    for d in dims:  # ids -> readable labels in items and cells
-        df[d.key] = df[d.key].map(labels(d)).fillna(df[d.key])
-        cells[d.key] = cells[d.key].map(labels(d)).fillna(cells[d.key])
+    for d in dims:  # ids -> readable labels in items and cells, kept in entry order
+        df[d.key], cells[d.key] = _ordered(df[d.key], d), _ordered(cells[d.key], d)
     for flag in ("in_interval", "url_seen"):
         df[flag] = df[flag].map({True: "yes", False: "no"}).fillna("unknown")
 
     filters = st.columns(len(dims) + 1)
     for col, d in zip(filters, dims):  # widget keys are per run: each run may have different dimensions
-        if chosen := col.multiselect(d.label, sorted(cells[d.key].unique()), key=f"filter_{run_id}_{d.key}"):
+        present = [c for c in cells[d.key].cat.categories if c in set(cells[d.key])]  # entry order
+        if chosen := col.multiselect(d.label, present, key=f"filter_{run_id}_{d.key}"):
             df, cells = df[df[d.key].isin(chosen)], cells[cells[d.key].isin(chosen)]
     if query := filters[-1].text_input("Search text", key="filter_text"):
         text = df[["title", "creator", "summary", "why_notable"]].astype(str).agg(" ".join, axis=1)
