@@ -1,68 +1,107 @@
-"""Tests for catalog.py — dimension options, default topics and turning table rows into agent jobs.
+"""Tests for catalog.py — dynamic dimensions, rules -> cells, and batching cells into agent jobs.
 
-Global context: build_jobs decides which Codex agents get launched (one per checked topic row), so
-its filtering and slug rules directly control cost and output folders.
+Global context: every combination of one option per dimension is one cell; rules select cells; build_jobs
+merges the dimensions the user chose into one agent and splits the rest into separate agents.
 """
 
-from datetime import date  # fixed "today" for deterministic interval ranges
+from dataclasses import replace  # derive modified dimensions in tests
+from datetime import date  # fixed "today" for interval ranges
 
 from agentic_news.catalog import (  # module under test
     DEFAULT_TOPICS,
-    DIMENSIONS,
+    Dimension,
+    Option,
     build_jobs,
-    default_rows,
+    default_dimensions,
+    default_rules,
+    expand_rules,
     interval_ranges,
+    slugify,
+    sync_rules,
+    validate_dimensions,
 )
 
-
-def test_default_topics_and_dimensions_match_the_spec() -> None:
-    """The 24 requested topics and the 4 dimensions with their stable IDs are present."""
-    assert len(DEFAULT_TOPICS) == 24 and "Memetic tribes in AI" in DEFAULT_TOPICS  # user's topic list
-    assert list(DIMENSIONS["intervals"]) == ["day", "week", "month", "year", "decade", "century"]
-    assert list(DIMENSIONS["types"]) == ["paper", "article", "book", "video", "podcast"]
-    assert list(DIMENSIONS["sources"]) == ["viral_papers", "viral_news", "viral_tweets", "viral_content"]
-    assert list(DIMENSIONS["variants"]) == ["pop_sci", "rigorous"]
+DIMS = default_dimensions()
+REGION = Dimension(key="region", label="Region", description="where the item is from",
+                   options=(Option("eu", "Europe"), Option("us", "United States")))
 
 
-def test_default_rows_are_unchecked_with_full_forms() -> None:
-    """Seed rows: one per topic, not selected, every option pre-filled."""
-    rows = default_rows()  # what the dashboard shows on first start
-    assert len(rows) == 24 and not any(r["run"] for r in rows)  # nothing launches by accident
-    assert rows[0]["intervals"] == list(DIMENSIONS["intervals"])  # full form by default
+def _rule(**values: list[str]) -> dict:
+    """Checked rule with one id per dimension unless overridden."""
+    base = {"run": True, "topic": ["physics"], "interval": ["day"], "type": ["paper"], "source": ["viral_news"],
+            "variant": ["rigorous"]}
+    return {**base, **values}
 
 
-def test_build_jobs_filters_orders_and_counts_cells() -> None:
-    """Only checked rows with a topic and non-empty dimensions become jobs; unknown values are dropped."""
-    rows = [
-        {"run": True, "topic": "Physics", "intervals": ["week", "day", "bogus"], "types": ["paper"],
-         "sources": ["viral_news"], "variants": ["rigorous", "pop_sci"]},
-        {"run": False, "topic": "Philosophy", "intervals": ["day"], "types": ["book"],
-         "sources": ["viral_news"], "variants": ["pop_sci"]},  # unchecked -> skipped
-        {"run": True, "topic": "  ", "intervals": ["day"], "types": ["book"],
-         "sources": ["viral_news"], "variants": ["pop_sci"]},  # blank topic -> skipped
-        {"run": True, "topic": "LLMs", "intervals": [], "types": ["book"],
-         "sources": ["viral_news"], "variants": ["pop_sci"]},  # empty dimension -> skipped
-    ]
-    jobs = build_jobs(rows)  # function under test
-    assert len(jobs) == 1  # only the first row survives
-    job = jobs[0]
-    assert job.intervals == ("day", "week")  # canonical order, unknown value dropped
-    assert job.variants == ("pop_sci", "rigorous")  # canonical order
-    assert job.cells == 2 * 1 * 1 * 2  # product of selected option counts
-    assert job.slug == "physics"  # folder-safe name
+def test_default_dimensions_match_the_spec() -> None:
+    """Five dimensions in order; 24 topics; interval options carry days."""
+    assert [d.key for d in DIMS] == ["topic", "interval", "type", "source", "variant"]
+    assert len(DIMS[0].options) == 24 == len(DEFAULT_TOPICS) and DIMS[0].options[0].id == "ai-industry"
+    assert [o.id for o in DIMS[1].options] == ["day", "week", "month", "year", "decade", "century"]
+    assert DIMS[1].kind == "interval" and DIMS[1].options[-1].days == 36524
+    assert validate_dimensions(DIMS) == []
 
 
-def test_build_jobs_makes_slugs_unique() -> None:
-    """Two rows whose topics slugify the same get distinct folder names."""
-    row = {"run": True, "intervals": ["day"], "types": ["book"], "sources": ["viral_news"], "variants": ["pop_sci"]}
-    jobs = build_jobs([{**row, "topic": "AI & Math"}, {**row, "topic": "AI  math"}])  # both -> "ai-math"
-    assert [j.slug for j in jobs] == ["ai-math", "ai-math-2"]  # collision gets a numeric suffix
+def test_validation_catches_bad_dimensions() -> None:
+    """Empty, duplicate, reserved and double-interval dimensions are reported."""
+    bad = [replace(DIMS[0], options=()), replace(DIMS[1], key="title"), DIMS[1], replace(REGION, key="interval")]
+    errors = " ".join(validate_dimensions(bad))
+    assert "no entries" in errors and "reserved" in errors and "duplicate" in errors
+    assert validate_dimensions([DIMS[1], replace(DIMS[1], key="when")])  # two interval dimensions
+    assert validate_dimensions([])  # at least one dimension
 
 
-def test_interval_ranges_from_fixed_today() -> None:
-    """Each interval maps to an inclusive (start, today) date range."""
-    ranges = interval_ranges(date(2026, 10, 22), ("day", "year", "century"))  # selected intervals only
-    assert ranges["day"] == (date(2026, 10, 21), date(2026, 10, 22))  # last 24 hours, as dates
-    assert ranges["year"][0] == date(2025, 10, 22)  # 365 days back
-    assert ranges["century"][0].year == 1926  # 100 years back
-    assert set(ranges) == {"day", "year", "century"}  # unselected intervals are absent
+def test_rules_expand_to_unique_cells_in_canonical_order() -> None:
+    """Union of checked rules' products; unknown ids and unchecked rules ignored; duplicates removed."""
+    rules = [_rule(interval=["week", "day", "bogus"]), _rule(), {**_rule(type=["book"]), "run": False}]
+    cells = expand_rules(rules, DIMS)
+    assert cells == [("physics", "day", "paper", "viral_news", "rigorous"),
+                     ("physics", "week", "paper", "viral_news", "rigorous")]
+
+
+def test_default_and_synced_rules_follow_dimensions() -> None:
+    """Seed = one unchecked rule per first-dimension entry; sync adds new dims/entries and drops removed ones."""
+    rules = default_rules(DIMS)
+    assert len(rules) == 24 and not rules[0]["run"] and rules[0]["topic"] == ["ai-industry"]
+    assert rules[0]["interval"] == [o.id for o in DIMS[1].options]
+    topics = replace(DIMS[0], options=DIMS[0].options[1:] + (Option("my-topic", "My topic"),))  # drop + add
+    synced = sync_rules(rules, [topics, *DIMS[1:], REGION])
+    assert ["ai-industry"] not in [r["topic"] for r in synced] and synced[-1]["topic"] == ["my-topic"]
+    assert all(r["region"] == ["eu", "us"] for r in synced)  # new dimension starts fully selected
+
+
+def test_all_stays_all_when_entries_are_added() -> None:
+    """Rules that selected every entry of a dimension also get its new entries; partial selections stay partial."""
+    empty = replace(REGION, options=())  # a dimension added from the UI starts empty
+    rules = sync_rules([{**_rule(), "region": []}, {**_rule(), "interval": ["day"]}], [*DIMS, empty])
+    grown_interval = replace(DIMS[1], options=DIMS[1].options + (Option("fortnight", "Last 2 weeks", "", 14),))
+    synced = sync_rules(rules, [DIMS[0], grown_interval, *DIMS[2:], REGION], previous=[*DIMS, empty])
+    assert [r["region"] for r in synced[:2]] == [["eu", "us"], ["eu", "us"]]  # empty-before = all-before
+    assert synced[0]["interval"] == ["day"] and synced[1]["interval"] == ["day"]  # partial stays partial
+    full = sync_rules([_rule(interval=[o.id for o in DIMS[1].options])], [DIMS[0], grown_interval, *DIMS[2:]],
+                      previous=DIMS)
+    assert full[0]["interval"][-1] == "fortnight"  # had all intervals -> gets the new one
+
+
+def test_build_jobs_split_merge_and_cap() -> None:
+    """No merge = one agent per cell; merged dims share an agent; the cap splits big groups."""
+    cells = expand_rules([_rule(topic=["physics", "pure-math"], interval=["day", "week"], type=["paper", "book"])],
+                         DIMS)  # 2 x 2 x 2 = 8 cells
+    assert len(build_jobs(cells, DIMS, merge=[], max_cells=0)) == 8
+    per_topic = build_jobs(cells, DIMS, merge=["interval", "type", "source", "variant"], max_cells=0)
+    assert [(j.label, len(j.cells)) for j in per_topic] == [("Physics", 4), ("Pure math", 4)]
+    assert per_topic[0].is_product and per_topic[0].values(1) == ("day", "week")
+    capped = build_jobs(cells, DIMS, merge=["topic", "interval", "type", "source", "variant"], max_cells=3)
+    assert [len(j.cells) for j in capped] == [3, 3, 2] and capped[0].label == "all cells (part 1/3)"
+    assert len({j.slug for j in capped}) == 3  # unique folder names
+
+
+def test_custom_dimension_and_interval_ranges() -> None:
+    """A sixth dimension multiplies cells; interval ranges use each option's days."""
+    dims = [*DIMS, REGION]
+    cells = expand_rules([{**_rule(), "region": ["eu", "us"]}], dims)
+    assert cells[-1] == ("physics", "day", "paper", "viral_news", "rigorous", "us") and len(cells) == 2
+    custom = replace(DIMS[1], options=(Option("fortnight", "Last 2 weeks", "", 14),))
+    assert interval_ranges(date(2026, 10, 22), custom, ("fortnight",)) == {
+        "fortnight": (date(2026, 10, 8), date(2026, 10, 22))}
+    assert slugify("AI & Math!") == "ai-math"

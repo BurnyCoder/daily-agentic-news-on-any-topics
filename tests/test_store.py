@@ -13,8 +13,7 @@ import pytest  # monkeypatch fixture
 from agentic_news import store  # module under test
 from agentic_news.catalog import Job  # jobs registered on the status board
 
-JOB = Job(topic="Physics", slug="physics", intervals=("day",), types=("paper",), sources=("viral_news",),
-          variants=("rigorous",))
+JOB = Job(slug="physics", label="Physics", cells=(("physics", "day", "paper", "viral_news", "rigorous"),))
 
 
 def test_write_json_retries_permission_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,7 +37,7 @@ def test_results_and_run_listing(tmp_path: Path) -> None:
         store.write_json(tmp_path / rid / "status.json", {"run_id": rid})
     store.write_json(tmp_path / "named" / "status.json", {"run_id": "named", "started": "2026-10-20T08:00:00"})
     rows = [{"topic": "Physics", "title": "T", "url": "https://x.org"}]
-    store.save_results(tmp_path / "20261022-090000", rows)
+    store.save_results(tmp_path / "20261022-090000", rows, ["topic", "title", "url"])
     assert store.load_results(tmp_path / "20261022-090000") == rows
     assert (tmp_path / "20261022-090000" / "results.csv").exists()
     assert store.list_runs(tmp_path) == ["named", "20261022-090000", "20261021-100000"]  # start time first

@@ -1,6 +1,6 @@
 """Launcher: start, inspect and stop a run as a background `agentic-news run` process.
 
-Local: `launch_run` snapshots the selection into runs/<run_id>/selection.json and starts
+Local: `launch_run` snapshots the workspace config into runs/<run_id>/config.json and starts
 `python -m agentic_news.cli run --run-id <id>` with CREATE_NEW_PROCESS_GROUP on Windows, so Ctrl+C in the
 Streamlit terminal does not kill it while its output still streams into that terminal
 (https://docs.python.org/3/library/subprocess.html#subprocess.CREATE_NEW_PROCESS_GROUP).
@@ -16,17 +16,18 @@ from pathlib import Path  # run folders
 import psutil  # pid liveness check (os.kill(pid, 0) would terminate the process on Windows)
 
 from agentic_news.codex_runner import kill_tree  # reuse the process-tree kill used for timeouts
+from agentic_news.config import RunConfig, config_to_dict  # snapshot of what to run
 from agentic_news.settings import PROJECT_ROOT, Settings  # paths
 from agentic_news.store import new_run_id, now, read_json, write_json  # run files
 
 _GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
 
 
-def launch_run(rows: list[dict], settings: Settings) -> str:
-    """Write the selection snapshot, start the CLI in the background, return the new run id."""
+def launch_run(cfg: RunConfig, settings: Settings) -> str:
+    """Write the config snapshot, start the CLI in the background, return the new run id."""
     run_id = new_run_id()
     run_dir, status_path = settings.runs_dir / run_id, settings.runs_dir / run_id / "status.json"
-    write_json(run_dir / "selection.json", rows)  # the CLI reads this snapshot first
+    write_json(run_dir / "config.json", config_to_dict(cfg))  # the CLI reads this snapshot first
     starting = {"run_id": run_id, "state": "starting", "pid": None, "started": now(), "ended": None, "agents": {}}
     write_json(status_path, starting)  # visible at once; the run's StatusBoard replaces it
     proc = subprocess.Popen([sys.executable, "-m", "agentic_news.cli", "run", "--run-id", run_id],

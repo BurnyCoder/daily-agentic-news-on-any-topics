@@ -7,7 +7,9 @@ how agents are launched (model, parallelism, timeouts).
 import os  # used to assert that loading .env does not leak values into the process environment
 from pathlib import Path  # paths for temporary .env files and expected directories
 
-from agentic_news.settings import Settings, load_settings  # module under test
+import pytest  # raises() for unknown overrides
+
+from agentic_news.settings import Settings, apply_overrides, load_settings  # module under test
 
 
 def test_defaults_without_env_file(tmp_path: Path) -> None:
@@ -48,3 +50,16 @@ def test_environment_overrides_env_file_and_is_not_modified(tmp_path: Path) -> N
     assert s.items_per_cell == 1  # environment value takes precedence
     assert dict(os.environ) == before  # nothing leaked into the environment the agents inherit
     assert isinstance(s, Settings)  # frozen dataclass instance
+
+
+def test_overrides_from_the_dashboard_replace_env_values() -> None:
+    """UI values (any JSON type) are converted like .env strings; paths and unknown keys are rejected."""
+    base = Settings()
+    s = apply_overrides(base, {"max_parallel_agents": 12, "codex_web_search": "cached", "agent_timeout_minutes": "5",
+                               "codex_ignore_user_config": False, "codex_disable_features": ["plugins"]})
+    assert (s.max_parallel_agents, s.codex_web_search, s.agent_timeout_minutes) == (12, "cached", 5.0)
+    assert s.codex_ignore_user_config is False and s.codex_disable_features == ("plugins",)
+    assert base.max_parallel_agents == 6  # original untouched (frozen dataclass copy)
+    for bad in ({"runs_dir": "x"}, {"nope": 1}):
+        with pytest.raises(ValueError):
+            apply_overrides(base, bad)

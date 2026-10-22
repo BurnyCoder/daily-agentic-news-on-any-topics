@@ -3,7 +3,7 @@
 Everything here was checked against **codex-cli 0.163.0** on Windows 11 (October 2026). `uv run pytest -m cli`
 re-checks the flag, feature and model names against whatever Codex version is installed.
 
-## The command each topic agent runs
+## The command each agent runs
 
 ```
 codex exec --json --color never --model gpt-6-luna
@@ -49,7 +49,7 @@ One web_search call usually bundles several queries. With `model_reasoning_summa
 items are short headings such as `**Preparing 30 search queries**`. There were 0–4 per agent at `medium` and
 12 at `high`; they are logged like every other event.
 
-## Live runs
+## Live runs, first version: one agent per topic
 
 Setup for every run:
 - each topic had the full form: 6 intervals × 5 types × 4 sources × 2 variants = 240 cells
@@ -79,9 +79,9 @@ tested.
 
 **AI governance** (run 5 only): 2 calls / 8 queries, 24 items, 18 links from search, 24 dated in interval.
 
-**Durations:** 41–79 s per run; agents ran in parallel. **Input tokens:** 76k–749k per agent, most of them
-cached. Run 1's links-from-search counts were computed afterwards from its event files, because the flag did
-not exist yet.
+**Durations:** 41–79 s per run; agents ran in parallel. **Input tokens:** 76k–749k per agent (run 3: 749k, of
+which 657k cached). Run 1's links-from-search counts were computed afterwards from its event files, because the
+flag did not exist yet.
 
 ### What we learned and what changed
 
@@ -107,7 +107,55 @@ not exist yet.
    - Items that fit no selected interval stay flagged. Example: the model files Riemann's 1859 paper under
      "last 100 years".
 
+## Live runs, granular cells and user-chosen batching
+
+Because of finding 1, every combination became its own cell, and batching became a user choice. The default
+is now one agent per cell, and any dimensions can be merged into one agent. Live tests stay tiny on purpose
+(2 cells), to check the mechanism without spending many credits.
+
+Each configuration ran once:
+- **Cell:** AI industry × Articles × Viral news × Pop sci, plus the interval or region shown.
+- **Limit:** `ITEMS_PER_CELL=1`.
+- **Data:** from `status.json` and `results.json`.
+
+| Run | Cells | Merge | Agents | Wall time | Searches per agent | Items | Dated in interval / from search | Off-grid dropped |
+|---|---|---|---|---|---|---|---|---|
+| live test A | last day, last week | none | 2 (parallel) | 13 s | 2, 2 | 2 | 2/2, 2/2 | 0 |
+| live test B | last day, last week | interval | 1 | 17 s | 3 | 2 | 2/2, 2/2 | 0 |
+| dashboard `20261022-023715` | last week × Region {Europe, USA} (user-added dimension) | none | 2 (parallel) | 18 s | 2, 2 | 4 | 4/4, 4/4 | 0 |
+
+**Input tokens:**
+- A one-cell agent used 73–77k input tokens (73,095; 77,430; 73,390; 75,427).
+- The merged 2-cell agent used 108,447.
+- So merging 2 cells cost about 1.4× one cell, while splitting cost 2×.
+
+**The Region run:**
+- The Europe agent searched with the region in its queries ("AI industry Europe October 2026 …").
+- It returned European outlets and stories (Euronews on Germany, TechRadar on a Belgian startup).
+- The USA agent returned Axios stories.
+
+### What we learned in this round
+
+6. **An error after launch could orphan an unsandboxed agent.**
+   - **What happened:** a live test failed early, but the test process only exited after 10 minutes.
+   - **Cause:** the runner opened the event file *after* starting Codex. When that raised (see 7), nothing killed
+     the process, and the non-daemon timeout timer kept Python alive.
+   - **Fix:** open the file first, kill the process tree in a `finally`, and make the timer a daemon.
+   - **Guard:** a regression test that fails on the old code and passes on the new.
+7. **Windows path length.** A very deep test folder plus an 80-character agent slug pushed paths past 260
+   characters. Slugs are now capped at 60 characters, and tests use pytest's short default temp folder.
+8. **New dimensions start empty.**
+   - Rules first saw the new dimension with no entries, so they selected nothing in it, and later entries never
+     got selected (0 cells).
+   - Fix: "all stays all". A rule that had every entry of a dimension selected (an empty dimension counts as
+     all) also gets entries added later; partial selections stay partial.
+9. **Bulk edit overwrote the per-row topic.**
+   - Applying a form also replaced each row's Topic with the bulk Topic picker (all topics).
+   - Fix: bulk edit now has "Apply these dimensions", which leaves the first dimension (Topic) alone by default.
+10. **Results UI:**
+    - The run picker kept an old run after a new one finished; it now jumps to the newest run.
+    - Grid columns were sorted alphabetically; they now follow each dimension's entry order.
+
 Open levers, not implemented:
-- split a topic into several agents (for example one per interval);
 - resume the Codex session to fill empty cells (`codex exec resume`);
-- a stronger model (`CODEX_MODEL`).
+- a stronger model (`CODEX_MODEL`, or per run in the dashboard).
