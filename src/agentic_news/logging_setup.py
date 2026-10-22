@@ -20,7 +20,9 @@ def setup_logging(logs_dir: Path, run_id: str) -> Path:
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_path = logs_dir / f"run_{run_id}.log"
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Windows consoles default to cp1252
+        # On Windows only the console device is UTF-8; pipes and files (scheduler, redirects) use the ANSI code
+        # page, e.g. cp1252 (https://docs.python.org/3/library/sys.html#sys.stdout)
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     formatter = logging.Formatter(_FORMAT, _DATEFMT)
     logger = logging.getLogger(LOGGER_NAME)
     for old in list(logger.handlers):  # idempotent: repeated runs in one process don't duplicate lines
