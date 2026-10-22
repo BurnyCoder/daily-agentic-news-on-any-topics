@@ -13,7 +13,7 @@ import subprocess  # background CLI process
 import sys  # same interpreter/venv as the dashboard
 from pathlib import Path  # run folders
 
-import psutil  # pid liveness check (os.kill(pid, 0) would terminate the process on Windows)
+import psutil  # pid liveness check: on Windows os.kill(pid, 0) sends CTRL_C_EVENT (== 0), it is no existence check
 
 from agentic_news.codex_runner import kill_tree  # reuse the process-tree kill used for timeouts
 from agentic_news.config import RunConfig, config_to_dict  # snapshot of what to run
