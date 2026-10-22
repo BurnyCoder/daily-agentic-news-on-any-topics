@@ -32,12 +32,16 @@ def render_selection(cfg: RunConfig) -> None:
                        column_config=config, num_rows="dynamic", hide_index=True)
     cfg.rules = [{"run": r["run"] is True, **{k: as_list(r[k]) for k in keys}} for r in df.to_dict("records")]
     with st.expander("Bulk edit"):
+        label_of = {d.key: d.label for d in dims}
+        apply_to = st.multiselect("Apply these dimensions", keys, default=keys[1:], format_func=label_of.get,
+                                  key="bulk_apply_to", help="By default the first dimension (one per row) is kept")
         cols = st.columns(max(len(dims), 1))
         picks = {d.key: col.multiselect(d.label, d.ids, default=d.ids, format_func=labels(d).get, key=f"bulk_{d.key}")
                  for col, d in zip(cols, dims)}
         apply, check, uncheck, reset = st.columns(4)
         if apply.button("Apply entries to checked rows"):
-            _replace_rules(cfg, [{**r, **picks} if r["run"] else r for r in cfg.rules])
+            chosen = {k: picks[k] for k in apply_to}
+            _replace_rules(cfg, [{**r, **chosen} if r["run"] else r for r in cfg.rules])
         if check.button("Check all"):
             _replace_rules(cfg, [{**r, "run": True} for r in cfg.rules])
         if uncheck.button("Uncheck all"):

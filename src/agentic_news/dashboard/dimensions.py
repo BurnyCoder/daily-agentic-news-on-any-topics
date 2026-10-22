@@ -22,8 +22,8 @@ KINDS = ["category", "interval"]
 def _apply(cfg: RunConfig, dims: list[Dimension]) -> None:
     """Install new dimensions, fit the rules to them and refresh the dependent editors."""
     if dims != cfg.dimensions:
+        cfg.rules = sync_rules(cfg.rules, dims, previous=cfg.dimensions)
         cfg.dimensions = dims
-        cfg.rules = sync_rules(cfg.rules, dims)
         cfg.merge = [k for k in cfg.merge if k in {d.key for d in dims}]
         reset_editor("rules")
 

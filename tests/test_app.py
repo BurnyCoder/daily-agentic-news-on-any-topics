@@ -86,3 +86,13 @@ def test_results_grid_and_items_of_a_finished_run(fake_env: Path) -> None:
     assert grid.loc["Physics", "Last day"] == 1 and grid.loc["Physics", "Last week"] == 0
     items = next(d.value for d in at.dataframe if "title" in d.value.columns)
     assert items.iloc[0]["title"] == "T" and items.iloc[0]["interval"] == "Last day"
+
+
+def test_bulk_edit_leaves_topics_alone_by_default(fake_env: Path) -> None:
+    """Applying bulk entries changes the chosen dimensions of checked rows; the topic column stays per row."""
+    write_json(fake_env / "data" / "workspace.json", config_to_dict(make_config("Physics", "LLMs")))
+    at = _app()
+    at.multiselect(key="bulk_interval").set_value(["week"])
+    next(b for b in at.button if b.label == "Apply entries to checked rows").click().run()
+    rules = read_json(fake_env / "data" / "workspace.json")["rules"]
+    assert [(r["topic"], r["interval"]) for r in rules] == [(["physics"], ["week"]), (["llms"], ["week"])]

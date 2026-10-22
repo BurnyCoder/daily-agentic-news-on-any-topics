@@ -31,7 +31,7 @@ def get_config(settings: Settings) -> RunConfig:
         except (KeyError, TypeError, ValueError):  # file from an incompatible version
             log.warning("workspace.json unreadable, starting from defaults")
             st.session_state.cfg = default_config()
-        st.session_state.saved = config_to_dict(st.session_state.cfg)
+        st.session_state.saved = config_to_dict(st.session_state.cfg) if data else None  # None -> first save writes
     return st.session_state.cfg
 
 

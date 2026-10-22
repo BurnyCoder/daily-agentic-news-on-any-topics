@@ -127,11 +127,21 @@ def default_rules(dims: list[Dimension]) -> list[dict]:
     return [{"run": False, first.key: [o.id], **{d.key: d.ids for d in rest}} for o in first.options]
 
 
-def sync_rules(rules: list[dict], dims: list[Dimension]) -> list[dict]:
-    """Fit rules to edited dimensions: drop unknown ids/dims, fully select new dims, add rules for new first entries."""
-    synced = [{"run": bool(r.get("run")),
-               **{d.key: [i for i in d.ids if i in set(r[d.key])] if d.key in r else d.ids for d in dims}}
-              for r in rules]
+def sync_rules(rules: list[dict], dims: list[Dimension], previous: list[Dimension] | None = None) -> list[dict]:
+    """Fit rules to edited dimensions.
+
+    Unknown ids and dimensions are dropped; new dimensions start fully selected; a rule that selected every entry of
+    a dimension in `previous` also gets that dimension's new entries ("all stays all"; an empty dimension counts as
+    all); first-dimension entries no rule mentions get their own unchecked rule.
+    """
+    before = {d.key: set(d.ids) for d in previous or ()}
+
+    def fit(rule: dict, dim: Dimension) -> list[str]:
+        chosen = set(rule.get(dim.key, dim.ids))
+        had_all = dim.key not in rule or (dim.key in before and chosen >= before[dim.key])
+        return dim.ids if had_all else [i for i in dim.ids if i in chosen]
+
+    synced = [{"run": bool(r.get("run")), **{d.key: fit(r, d) for d in dims}} for r in rules]
     if not dims:
         return synced
     covered = {i for r in synced for i in r[dims[0].key]}
