@@ -1,9 +1,9 @@
-"""Storage: every file the app reads or writes — run folders, status, results and the saved workspace.
+"""Storage: the run and workspace files — config/status/results JSON, results CSV and the saved workspace.
 
 Local: JSON is written atomically (temp file + `os.replace`, https://docs.python.org/3/library/os.html#os.replace).
-On Windows `os.replace` raises PermissionError while another process holds the target open (the dashboard
-polling status.json; https://github.com/python/cpython/issues/90161), so writes retry briefly. StatusBoard is
-the single writer of status.json for a run.
+On Windows `os.replace` raises PermissionError while the target is open elsewhere (here: the dashboard reading
+status.json; https://github.com/python/cpython/issues/90161 reports it for any open handle), so writes retry
+briefly. StatusBoard is the single writer of status.json for a run.
 Global context: layout is runs/<run_id>/{config.json, status.json, results.json, results.csv, <agent>/...}
 and data/workspace.json; the CLI writes run files, the Streamlit dashboard reads them and edits the workspace.
 """
