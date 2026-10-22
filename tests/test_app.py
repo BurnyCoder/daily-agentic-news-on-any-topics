@@ -72,7 +72,7 @@ def test_add_dimension_from_the_ui(fake_env: Path) -> None:
 def test_results_grid_and_items_of_a_finished_run(fake_env: Path) -> None:
     """A finished run shows the cell grid (zeros included) and its items with readable labels."""
     run_dir = fake_env / "runs" / "20261022-090000"
-    cfg = make_config("Physics", intervals=("day", "week"))
+    cfg = make_config("Physics", intervals=("day", "week", "decade"))
     write_json(run_dir / "config.json", config_to_dict(cfg))
     write_json(run_dir / "status.json", {"run_id": "20261022-090000", "state": "done", "pid": 0, "agents": {}})
     write_json(run_dir / "results.json", [{"topic": "physics", "interval": "day", "type": "paper",
@@ -84,6 +84,7 @@ def test_results_grid_and_items_of_a_finished_run(fake_env: Path) -> None:
     assert not at.exception
     grid = next(d.value for d in at.dataframe if "Last week" in d.value.columns)
     assert grid.loc["Physics", "Last day"] == 1 and grid.loc["Physics", "Last week"] == 0
+    assert list(grid.columns) == ["Last day", "Last week", "Last 10 years"]  # entry order, not alphabetical
     items = next(d.value for d in at.dataframe if "title" in d.value.columns)
     assert items.iloc[0]["title"] == "T" and items.iloc[0]["interval"] == "Last day"
 
