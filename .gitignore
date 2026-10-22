@@ -12,7 +12,7 @@ wheels/
 # Local config with secrets/overrides — never pushed (see .env.example)
 .env
 
-# Runtime output: logs hold full prompts + web content, runs/ hold agent outputs, data/ holds the saved selection
+# Runtime output: logs hold full prompts + web content, runs/ hold agent outputs, data/ holds the saved workspace
 logs/
 runs/
 data/
