@@ -155,6 +155,17 @@ Each configuration ran once:
 10. **Results UI:**
     - The run picker kept an old run after a new one finished; it now jumps to the newest run.
     - Grid columns were sorted alphabetically; they now follow each dimension's entry order.
+11. **Bulk edit's "Apply these dimensions" kept stale keys.** After a dimension key was renamed (or a dimension
+    added), the picker kept its saved value, so the renamed/new dimension was left out. The widget now has no
+    fixed key: when the dimensions change it resets to "every dimension except the first".
+
+A merged run checked through the UI: 4 cells (last day/last week × papers/articles) with *Type* merged gave
+2 agents of 2 cells each, in 44 s, with 6 items and 0 dropped (run `20261022-030136`). It also showed the
+following:
+- a renamed dimension key (`variant` → `level`) flows into the prompts and results;
+- `results.csv` carries `*_label` columns;
+- a paper dated one day before "last day" was flagged out of range rather than moved into the other agent's
+  "last week" cell.
 
 Open levers, not implemented:
 - resume the Codex session to fill empty cells (`codex exec resume`);

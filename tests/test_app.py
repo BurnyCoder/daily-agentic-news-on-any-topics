@@ -133,3 +133,12 @@ def test_adding_a_dimension_twice_keeps_keys_unique(fake_env: Path) -> None:
         next(b for b in at.button if b.label == "Add dimension").click().run()
     keys = [d["key"] for d in read_json(fake_env / "data" / "workspace.json")["dimensions"]]
     assert keys[-2:] == ["region", "region_2"]
+
+
+def test_bulk_apply_follows_dimension_changes(fake_env: Path) -> None:
+    """After a dimension is added, bulk edit applies to it too (all dimensions except the first)."""
+    at = _app()
+    next(t for t in at.text_input if t.label == "Label").set_value("Audience level")
+    next(b for b in at.button if b.label == "Add dimension").click().run()
+    apply_to = next(m for m in at.multiselect if m.label == "Apply these dimensions")
+    assert apply_to.value == ["interval", "type", "source", "variant", "audience_level"]

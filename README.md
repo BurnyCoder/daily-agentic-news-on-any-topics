@@ -75,7 +75,8 @@ Everything is editable in the dashboard and in code (`catalog.default_dimensions
    - **Date in range:** the publication date lies inside the interval;
    - **Link from search:** the URL appeared in the agent's own web-search results; other links came from the
      model's memory and are unverified.
-5. **Results.** It merges all rows into `runs/<id>/results.json` and `.csv`. The dashboard shows them as a grid
+5. **Results.** It merges all rows into `runs/<id>/results.json` and `.csv`. Each row has every dimension's id
+   and readable label. The dashboard shows them as a grid
    whose rows and columns are dimensions you choose, with item counts per cell. Select rows, columns or cells to
    list their items.
 
@@ -118,7 +119,9 @@ Open http://localhost:8501. Optional: `cp .env.example .env` and edit the defaul
 ![Dimensions panel with a user-added Region dimension](docs/images/dimensions.jpg)
 
 1. **Dimensions and entries** (expander):
-   - The dimensions table edits label, description, kind and order.
+   - The dimensions table edits key, label, description, kind and order. Renaming a key carries the rules and
+     merge choices over to it.
+   - Ids and keys are made from labels when left empty and kept unique (a second "Region" becomes `region_2`).
    - *Add a dimension* creates a new one (it starts empty, so add its entries next).
    - *Remove a dimension* and *Reset all dimensions to defaults*.
    - *Edit entries of* opens any dimension's entries: add, rename or remove them, with definitions and days back
@@ -208,7 +211,7 @@ and [.env.example](.env.example) documents each one.
 - **Results:** pivot grid with any dimensions on rows/columns, cell/row/column drill-down, filters, text search,
   coverage notes, CSV.
 - **Headless CLI** for scheduled daily runs.
-- **Tests:** 47 unit/end-to-end/UI tests on a fake Codex executable, 3 contract tests against the installed CLI,
+- **Tests:** 52 unit/end-to-end/UI tests on a fake Codex executable, 3 contract tests against the installed CLI,
   and 2 opt-in live tests on 2 cells.
 
 ## Technologies
