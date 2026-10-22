@@ -94,8 +94,8 @@ def render_results(settings: Settings) -> None:
     st.session_state[cols_key] = [k for k in st.session_state.get(cols_key, [interval]) if k not in rows]
     cols = c.multiselect("Grid columns", [k for k in keys if k not in rows], format_func=label_of.get, key=cols_key)
     grid, row_tuples, col_tuples = _pivot(df, cells, keys, rows, cols)
-    st.caption(f"Items per cell over {len(cells)} selected cell(s). Select grid rows, columns or cells to list "
-               "their items below.")
+    st.caption(f"Item counts over {len(cells)} selected cell(s), summed over the dimensions not on the grid. Select "
+               "grid rows, columns or cells to list their items below.")
     event = st.dataframe(grid, on_select="rerun", selection_mode=["multi-row", "multi-column", "multi-cell"],
                          key=f"pivot_{run_id}")
     sel = event.selection

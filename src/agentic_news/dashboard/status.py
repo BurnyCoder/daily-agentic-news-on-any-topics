@@ -10,7 +10,7 @@ import pandas as pd  # status table
 import streamlit as st  # UI
 
 from agentic_news.launcher import is_active, stop_run  # run control
-from agentic_news.settings import Settings  # runs_dir
+from agentic_news.settings import PROJECT_ROOT, Settings  # runs_dir, logs_dir
 from agentic_news.store import list_runs, read_json  # run files
 
 
@@ -36,8 +36,10 @@ def _status_body(settings: Settings) -> None:
     state = "interrupted" if not active and status.get("state") in ("starting", "running") else status.get("state")
     agents = status.get("agents", {}).values()
     done = sum(a["state"] in ("done", "failed", "timeout") for a in agents)
+    log = settings.logs_dir / f"run_{runs[0]}.log"  # LOGS_DIR may point anywhere; show it relative when inside
+    log = log.relative_to(PROJECT_ROOT) if log.is_relative_to(PROJECT_ROOT) else log
     st.markdown(f"Run **{runs[0]}**: **{state}** · {done}/{len(agents)} agents finished · started "
-                f"{status.get('started')} · log `logs/run_{runs[0]}.log`")
+                f"{status.get('started')} · log `{log}`")
     if agents:
         st.dataframe(pd.DataFrame([{"agent": a.get("label", a.get("topic")), "state": a["state"],
                                     "attempt": a["attempt"], "cells": a["cells"], "searches": a["searches"],
