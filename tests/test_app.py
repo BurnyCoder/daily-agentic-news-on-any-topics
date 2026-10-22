@@ -121,6 +121,7 @@ def test_agents_section_shows_live_status(fake_env: Path) -> None:
                                                                 "error": ""}}})
     at = _app()
     assert "1/1 agents finished" in _markdown(at)
+    assert str(fake_env / "logs" / "run_20261022-100000.log") in _markdown(at)  # the configured LOGS_DIR
     table = next(d.value for d in at.dataframe if "agent" in d.value.columns)
     assert table.iloc[0]["agent"] == "Physics · Last day" and table.iloc[0]["off-grid dropped"] == 1
 

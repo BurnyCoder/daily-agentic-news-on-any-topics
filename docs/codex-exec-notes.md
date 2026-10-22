@@ -26,7 +26,7 @@ codex exec --json --color never --model gpt-6-luna
 | `--ephemeral` | no session files; the raw events are already saved per attempt |
 | `--skip-git-repo-check` | agent folders are not repositories |
 | `--ignore-user-config` | does not load `$CODEX_HOME/config.toml` (e.g. personal MCP servers); "auth still uses `CODEX_HOME`" per `codex exec --help` (`CODEX_IGNORE_USER_CONFIG=false` to turn off) |
-| `--disable ...` | skips plugin/app catalogs and sub-agent fan-out per agent; feature names are listed by `codex features list` |
+| `--disable ...` | turns off the plugin, app, tool-suggestion and multi-agent (sub-agent) features for news agents; each flag equals `-c features.<name>=false` (`codex exec --help`), and the names are listed by `codex features list` |
 | `--output-schema` | strict JSON answer; Codex applies it to **every** agent message, not just the last ([openai/codex#19816](https://github.com/openai/codex/issues/19816)), hence the prompt's "no progress messages" rule |
 | `-o` + trailing `-` | final answer in a file; prompt read from stdin (avoids Windows quoting and command-line length limits) |
 
@@ -136,7 +136,9 @@ is now one agent per cell, and any dimensions can be merged into one agent. Live
 
 Each configuration ran once:
 - **Cell:** AI industry × Articles × Viral news × Pop sci, plus the interval or region shown.
-- **Limit:** `ITEMS_PER_CELL=1`.
+- **Limit:** `ITEMS_PER_CELL=1` in live tests A and B (override in `tests/test_live.py`). The dashboard runs used
+  the default 2 (their `config.json` has no override and their `prompt.md` says "up to 2 items"), so their one-cell
+  agents returned 2 items each.
 - **Data:** from `status.json` and `results.json`. Live tests A and B ran in pytest temp folders that were not
   kept, so their numbers come from the terminal log of `uv run pytest -m live -s`; the dashboard runs are in
   `runs/`.
@@ -150,7 +152,7 @@ Each configuration ran once:
 **Input tokens:**
 - A one-cell agent used 73–77k input tokens (live test A: 73,095 and 77,430; Region run: 73,390 and 75,427).
 - 2-cell agents used 108,447 (live test B, interval merged), 119,269 and 262,613 (run `20261022-030136` below,
-  type merged): 1.4–3.5× a one-cell agent, while splitting 2 cells costs 2×.
+  type merged): 1.4–3.5× the mean one-cell agent (74,836), while splitting 2 cells costs 2×.
 - With 3 merged agents the saving is not reliable: the 263k agent cost more than two one-cell agents.
 
 **The Region run:**
