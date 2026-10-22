@@ -1,4 +1,4 @@
-"""Codex runner: launch one unsandboxed `codex exec` process per topic, stream its events, collect its answer.
+"""Codex runner: launch one unsandboxed `codex exec` process per batch of cells, stream its events, collect its answer.
 
 Local: `build_command` assembles the CLI flags (https://learn.chatgpt.com/docs/non-interactive-mode,
 `codex exec --help`); `run_agent` starts the process with the prompt on stdin, streams stdout JSONL line by
@@ -20,7 +20,7 @@ from pathlib import Path  # agent folders
 
 import psutil  # cross-platform process-tree kill
 
-from agentic_news.catalog import Job  # the topic assignment
+from agentic_news.catalog import Dimension, Job  # the batch of cells and the dimensions describing them
 from agentic_news.events import describe_event, is_fatal_error, search_urls  # log, retry policy, searched URLs
 from agentic_news.schema import parse_final  # validation of the final JSON
 from agentic_news.settings import Settings  # flags, limits
@@ -31,9 +31,10 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class AgentSpec:
-    """Everything one agent needs: job, its folder (with schema.json), the full prompt, run metadata."""
+    """Everything one agent needs: job, dimensions, its folder (with schema.json), the full prompt, run metadata."""
 
     job: Job
+    dims: list[Dimension]
     agent_dir: Path
     prompt: str
     run_id: str
@@ -50,6 +51,7 @@ class AgentResult:
     coverage_notes: str = ""
     error: str = ""
     attempts: int = 0
+    dropped: int = 0  # items the agent filed in cells it was not asked for
 
 
 def build_command(settings: Settings, agent_dir: Path) -> list[str]:
@@ -127,11 +129,13 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     answer = final_path.read_text(encoding="utf-8") if final_path.exists() else last_message
     log.info("%s exit code %s, final answer:\n%s", tag, proc.returncode, answer)
     try:
-        rows, notes = parse_final(answer, spec.job, spec.run_id, spec.today, seen_urls)
+        rows, notes, dropped = parse_final(answer, spec.job, spec.dims, spec.run_id, spec.today, seen_urls)
     except ValueError as exc:
         reason = board.data["agents"][slug]["error"] or " | ".join(stderr_tail) or str(exc)
         return AgentResult(spec.job, "failed", error=f"exit {proc.returncode}: {reason}", attempts=attempt)
-    return AgentResult(spec.job, "done", items=rows, coverage_notes=notes, attempts=attempt)
+    if dropped:
+        log.warning("%s dropped %d item(s) filed in cells outside this batch", tag, dropped)
+    return AgentResult(spec.job, "done", items=rows, coverage_notes=notes, attempts=attempt, dropped=dropped)
 
 
 def _handle_line(line: str, slug: str, tag: str, board: StatusBoard, seen_urls: set[str]) -> str | None:
@@ -151,8 +155,8 @@ def _handle_line(line: str, slug: str, tag: str, board: StatusBoard, seen_urls: 
 
 
 def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentResult:
-    """Run one topic agent with retries (none after timeouts or usage-limit/auth errors)."""
-    log.info("[%s] prompt (%d cells):\n%s", spec.job.slug, spec.job.cells, spec.prompt)
+    """Run one agent with retries (none after timeouts or usage-limit/auth errors)."""
+    log.info("[%s] %s — prompt (%d cells):\n%s", spec.job.slug, spec.job.label, len(spec.job.cells), spec.prompt)
     result = AgentResult(spec.job, "failed", error="not started")
     try:
         for attempt in range(1, settings.agent_max_retries + 2):
@@ -165,7 +169,7 @@ def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentR
         result = AgentResult(spec.job, "failed", error=repr(exc), attempts=result.attempts)
     write_json(spec.agent_dir / "items.json", result.items)  # partial results for the dashboard mid-run
     board.update(spec.job.slug, state=result.state, ended=now(), items=len(result.items), error=result.error,
-                 coverage_notes=result.coverage_notes)
+                 coverage_notes=result.coverage_notes, dropped=result.dropped)
     log.info("[%s] %s with %d items after %d attempt(s)", spec.job.slug, result.state, len(result.items),
              result.attempts)
     return result

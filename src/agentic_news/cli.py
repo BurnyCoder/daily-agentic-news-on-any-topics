@@ -1,4 +1,4 @@
-"""Command-line entry point: `agentic-news run [--run-id ID] [--selection PATH]`.
+"""Command-line entry point: `agentic-news run [--run-id ID] [--config PATH]`.
 
 Local: parses arguments (https://docs.python.org/3/library/argparse.html), loads settings, sets up the run
 log, runs the pipeline, and records a failed status if anything outside the agents breaks.
@@ -9,7 +9,7 @@ background; the same command works from a terminal or Windows Task Scheduler for
 import argparse  # CLI parsing
 import logging  # top-level progress/errors
 import sys  # exit code
-from pathlib import Path  # --selection path
+from pathlib import Path  # --config path
 
 from agentic_news.logging_setup import setup_logging  # run log + terminal
 from agentic_news.pipeline import run_pipeline  # the wrapper with all phases
@@ -21,18 +21,18 @@ log = logging.getLogger(__name__)
 
 def main(argv: list[str] | None = None) -> int:
     """Run the requested command; return the process exit code."""
-    parser = argparse.ArgumentParser(prog="agentic-news", description="Launch one Codex agent per selected topic.")
+    parser = argparse.ArgumentParser(prog="agentic-news", description="Launch Codex agents for the selected cells.")
     sub = parser.add_subparsers(dest="command", required=True)
-    run = sub.add_parser("run", help="run all selected topic agents and save results under runs/<run_id>/")
+    run = sub.add_parser("run", help="run the selected cells' agents and save results under runs/<run_id>/")
     run.add_argument("--run-id", help="folder name under runs/ (default: current timestamp)")
-    run.add_argument("--selection", type=Path, help="selection JSON (default: the dashboard's saved selection)")
+    run.add_argument("--config", type=Path, help="config JSON (default: the dashboard's data/workspace.json)")
     args = parser.parse_args(argv)
     settings = load_settings()
     run_id = args.run_id or new_run_id()
     log_path = setup_logging(settings.logs_dir, run_id)
     log.info("run %s starting; log file %s; settings %s", run_id, log_path, settings)
     try:
-        run_dir = run_pipeline(run_id, settings, args.selection)
+        run_dir = run_pipeline(run_id, settings, args.config)
     except Exception as exc:  # recorded so the dashboard shows why the run died
         log.exception("run %s failed", run_id)
         status_path = settings.runs_dir / run_id / "status.json"

@@ -12,7 +12,7 @@ from pathlib import Path  # temporary agent folders
 
 import psutil  # check that killed processes are gone
 
-from agentic_news.catalog import Job  # job under test
+from agentic_news.catalog import Job, default_dimensions  # one-cell job + the dimensions describing it
 from agentic_news.codex_runner import AgentSpec, build_command, run_agent, run_agents  # under test
 from agentic_news.schema import build_output_schema  # schema file the fake reads
 from agentic_news.settings import Settings  # runner configuration
@@ -20,11 +20,11 @@ from agentic_news.store import StatusBoard, read_json  # status board the runner
 
 FAKE = Path(__file__).parent / "fixtures" / "fake_codex.py"
 FAST = Settings(codex_cmd=(sys.executable, str(FAKE)), agent_timeout_minutes=0.05, agent_max_retries=1)
+DIMS = default_dimensions()
 
 
 def _job(slug: str = "physics") -> Job:
-    return Job(topic=slug.title(), slug=slug, intervals=("day",), types=("paper",), sources=("viral_news",),
-               variants=("rigorous",))
+    return Job(slug=slug, label=slug.title(), cells=(("physics", "day", "paper", "viral_news", "rigorous"),))
 
 
 def _spec(tmp_path: Path, mode: str, slug: str = "physics") -> AgentSpec:
@@ -32,9 +32,9 @@ def _spec(tmp_path: Path, mode: str, slug: str = "physics") -> AgentSpec:
     job = _job(slug)
     agent_dir = tmp_path / slug
     agent_dir.mkdir()
-    (agent_dir / "schema.json").write_text(json.dumps(build_output_schema(job)), encoding="utf-8")
+    (agent_dir / "schema.json").write_text(json.dumps(build_output_schema(job, DIMS)), encoding="utf-8")
     prompt = f"MODE={mode}\nUnicode check: é ∑ 漢字\nline two\n"
-    return AgentSpec(job=job, agent_dir=agent_dir, prompt=prompt, run_id="r1", today=date(2026, 10, 22))
+    return AgentSpec(job=job, dims=DIMS, agent_dir=agent_dir, prompt=prompt, run_id="r1", today=date(2026, 10, 22))
 
 
 def test_build_command_has_the_planned_flags(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ def test_successful_agent(tmp_path: Path) -> None:
     spec = _spec(tmp_path, "ok")
     board = StatusBoard(tmp_path / "status.json", "r1", [spec.job])
     result = run_agent(spec, FAST, board)
-    assert result.state == "done" and result.items[0]["topic"] == "Physics" and result.coverage_notes == "fake notes"
+    assert result.state == "done" and result.items[0]["topic"] == "physics" and result.coverage_notes == "fake notes"
     assert result.items[0]["url_seen"] is True  # the fake's search results contained the answer's link
     assert (spec.agent_dir / "received_prompt.txt").read_bytes() == spec.prompt.encode("utf-8")
     raw = (spec.agent_dir / "events_attempt1.jsonl").read_text(encoding="utf-8").splitlines()
