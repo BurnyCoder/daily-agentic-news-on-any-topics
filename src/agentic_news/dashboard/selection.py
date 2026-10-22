@@ -33,8 +33,10 @@ def render_selection(cfg: RunConfig) -> None:
     cfg.rules = [{"run": r["run"] is True, **{k: as_list(r[k]) for k in keys}} for r in df.to_dict("records")]
     with st.expander("Bulk edit"):
         label_of = {d.key: d.label for d in dims}
+        # No widget key on purpose: when dimensions are added/renamed/removed, the options change and the
+        # widget resets to its default (every dimension except the first), so new dimensions are included.
         apply_to = st.multiselect("Apply these dimensions", keys, default=keys[1:], format_func=label_of.get,
-                                  key="bulk_apply_to", help="By default the first dimension (one per row) is kept")
+                                  help="By default the first dimension (one per row) is kept")
         cols = st.columns(max(len(dims), 1))
         picks = {d.key: col.multiselect(d.label, d.ids, default=d.ids, format_func=labels(d).get, key=f"bulk_{d.key}")
                  for col, d in zip(cols, dims)}
