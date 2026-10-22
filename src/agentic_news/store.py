@@ -1,10 +1,10 @@
-"""Storage: every file the app reads or writes — run folders, status, results and the saved topic selection.
+"""Storage: every file the app reads or writes — run folders, status, results and the saved workspace.
 
 Local: JSON is written atomically (temp file + `os.replace`, https://docs.python.org/3/library/os.html#os.replace).
 On Windows `os.replace` raises PermissionError while another process holds the target open (the dashboard
 polling status.json), so writes retry briefly. StatusBoard is the single writer of status.json for a run.
-Global context: layout is runs/<run_id>/{selection.json, status.json, results.json, results.csv, <topic>/...}
-and data/selection.json; the CLI writes these, the Streamlit dashboard only reads them (plus the selection).
+Global context: layout is runs/<run_id>/{config.json, status.json, results.json, results.csv, <agent>/...}
+and data/workspace.json; the CLI writes run files, the Streamlit dashboard reads them and edits the workspace.
 """
 
 import json  # file format
@@ -18,10 +18,6 @@ import pandas as pd  # CSV export of results
 
 from agentic_news.catalog import Job  # agents registered on the board
 from agentic_news.events import apply_event, new_counters  # per-event counter updates
-
-RESULT_COLUMNS = ["topic", "interval", "type", "source", "variant", "title", "url", "published", "creator",
-                  "summary", "why_notable", "in_interval", "url_seen", "run_id"]  # column order for CSV and table
-
 
 def now() -> str:
     """Local timestamp, second precision, ISO 8601."""
@@ -56,10 +52,10 @@ def read_json(path: Path, default: object = None) -> object:
         return default
 
 
-def save_results(run_dir: Path, rows: list[dict]) -> None:
-    """results.json (source of truth) + results.csv (for spreadsheets)."""
+def save_results(run_dir: Path, rows: list[dict], columns: list[str]) -> None:
+    """results.json (source of truth) + results.csv (for spreadsheets) with the given column order."""
     write_json(run_dir / "results.json", rows)
-    pd.DataFrame(rows, columns=RESULT_COLUMNS).to_csv(run_dir / "results.csv", index=False, encoding="utf-8")
+    pd.DataFrame(rows, columns=columns).to_csv(run_dir / "results.csv", index=False, encoding="utf-8")
 
 
 def load_results(run_dir: Path) -> list[dict]:
@@ -86,8 +82,8 @@ class StatusBoard:
         self._lock = threading.Lock()  # worker threads update concurrently
         self._last_write = 0.0
         self.data = {"run_id": run_id, "state": "running", "pid": os.getpid(), "started": now(), "ended": None,
-                     "agents": {j.slug: {"topic": j.topic, "cells": j.cells, "state": "queued", "attempt": 0,
-                                         "started": None, "ended": None, "items": 0, "last_event": "",
+                     "agents": {j.slug: {"label": j.label, "cells": len(j.cells), "state": "queued", "attempt": 0,
+                                         "started": None, "ended": None, "items": 0, "dropped": 0, "last_event": "",
                                          **new_counters()} for j in jobs}}
         self._write()
 

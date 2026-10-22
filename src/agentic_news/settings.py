@@ -10,7 +10,7 @@ inherited by the unsandboxed Codex agents.
 
 import os  # os.environ supplies per-run overrides, e.g. `MAX_PARALLEL_AGENTS=2 uv run agentic-news run`
 from collections.abc import Mapping  # type of the environment mapping (injectable for tests)
-from dataclasses import dataclass, fields  # frozen config record + iteration over its fields
+from dataclasses import dataclass, fields, replace  # frozen config record, field iteration, modified copies
 from pathlib import Path  # filesystem paths for runs/logs/data
 
 from dotenv import dotenv_values  # parses .env into a dict without touching os.environ
@@ -37,6 +37,7 @@ class Settings:
     agent_max_retries: int = 1  # extra attempts after a failure/invalid answer
     items_per_cell: int = 2  # items requested per interval x type x source x variant
     max_items_per_agent: int = 60  # cap on one agent's answer size
+    confirm_above_agents: int = 30  # dashboard asks for explicit confirmation above this many agents
     runs_dir: Path = Path("runs")  # per-run folders (status, results, per-agent artifacts)
     logs_dir: Path = Path("logs")  # timestamped run logs
     data_dir: Path = Path("data")  # dashboard's saved topic selection
@@ -72,3 +73,12 @@ def load_settings(env_file: Path | None = None, root: Path = PROJECT_ROOT,
     paths = {name: root / getattr(Settings, name) for name in ("runs_dir", "logs_dir", "data_dir")
              if name not in values}  # anchor default relative paths at the root too
     return Settings(**{**paths, **values})
+
+
+def apply_overrides(settings: Settings, overrides: Mapping[str, object]) -> Settings:
+    """Copy of settings with per-run values from the dashboard (any JSON type); paths can't be overridden."""
+    allowed = {f.name: f.default for f in fields(Settings) if not isinstance(f.default, Path)}
+    if unknown := set(overrides) - set(allowed):
+        raise ValueError(f"unknown or non-overridable settings: {sorted(unknown)}")
+    as_text = {k: ",".join(v) if isinstance(v, (list, tuple)) else str(v) for k, v in overrides.items()}
+    return replace(settings, **{k: _convert(raw, allowed[k], PROJECT_ROOT) for k, raw in as_text.items()})

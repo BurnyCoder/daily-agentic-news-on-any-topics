@@ -1,4 +1,4 @@
-"""Codex runner: launch one unsandboxed `codex exec` process per topic, stream its events, collect its answer.
+"""Codex runner: launch one unsandboxed `codex exec` process per batch of cells, stream its events, collect its answer.
 
 Local: `build_command` assembles the CLI flags (https://learn.chatgpt.com/docs/non-interactive-mode,
 `codex exec --help`); `run_agent` starts the process with the prompt on stdin, streams stdout JSONL line by
@@ -20,7 +20,7 @@ from pathlib import Path  # agent folders
 
 import psutil  # cross-platform process-tree kill
 
-from agentic_news.catalog import Job  # the topic assignment
+from agentic_news.catalog import Dimension, Job  # the batch of cells and the dimensions describing them
 from agentic_news.events import describe_event, is_fatal_error, search_urls  # log, retry policy, searched URLs
 from agentic_news.schema import parse_final  # validation of the final JSON
 from agentic_news.settings import Settings  # flags, limits
@@ -31,9 +31,10 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class AgentSpec:
-    """Everything one agent needs: job, its folder (with schema.json), the full prompt, run metadata."""
+    """Everything one agent needs: job, dimensions, its folder (with schema.json), the full prompt, run metadata."""
 
     job: Job
+    dims: list[Dimension]
     agent_dir: Path
     prompt: str
     run_id: str
@@ -50,6 +51,7 @@ class AgentResult:
     coverage_notes: str = ""
     error: str = ""
     attempts: int = 0
+    dropped: int = 0  # items the agent filed in cells it was not asked for
 
 
 def build_command(settings: Settings, agent_dir: Path) -> list[str]:
@@ -97,29 +99,34 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     final_path = spec.agent_dir / "final.json"
     final_path.unlink(missing_ok=True)  # -o is only written on success; never reuse a previous attempt's file
     cmd = build_command(settings, spec.agent_dir)
-    log.info("%s launching: %s", tag, subprocess.list2cmdline(cmd))
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, encoding="utf-8", errors="replace", bufsize=1)  # line-buffered text
-    board.update(slug, state="running", attempt=attempt, started=now(), pid=proc.pid)
+    last_message, seen_urls, stderr_tail = "", set(), []
     timed_out = threading.Event()
-    timer = threading.Timer(settings.agent_timeout_minutes * 60, lambda: (timed_out.set(), kill_tree(proc.pid)))
-    stderr_tail: list[str] = []
-    pump = threading.Thread(target=_pump_stderr, args=(proc.stderr, tag, stderr_tail), daemon=True)
-    timer.start()
-    pump.start()  # start reading stderr before writing stdin so neither pipe can fill up and block
-    try:
-        proc.stdin.buffer.write(spec.prompt.encode("utf-8"))  # bytes: no CRLF translation of the prompt
-        proc.stdin.close()
-    except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
-        log.warning("%s could not send prompt: %s", tag, exc)
-    last_message, seen_urls = "", set()
+    # Open the raw event file first, so a bad path fails before any process exists.
     with open(spec.agent_dir / f"events_attempt{attempt}.jsonl", "w", encoding="utf-8") as raw:
-        for line in proc.stdout:  # yields each JSONL line as soon as codex flushes it
-            raw.write(line)
-            raw.flush()
-            last_message = _handle_line(line, slug, tag, board, seen_urls) or last_message
-    proc.wait()
-    timer.cancel()
+        log.info("%s launching: %s", tag, subprocess.list2cmdline(cmd))
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace", bufsize=1)  # line-buffered text
+        timer = threading.Timer(settings.agent_timeout_minutes * 60, lambda: (timed_out.set(), kill_tree(proc.pid)))
+        timer.daemon = True  # never keeps the interpreter alive
+        pump = threading.Thread(target=_pump_stderr, args=(proc.stderr, tag, stderr_tail), daemon=True)
+        try:
+            board.update(slug, state="running", attempt=attempt, started=now(), pid=proc.pid)
+            timer.start()
+            pump.start()  # start reading stderr before writing stdin so neither pipe can fill up and block
+            try:
+                proc.stdin.buffer.write(spec.prompt.encode("utf-8"))  # bytes: no CRLF translation of the prompt
+                proc.stdin.close()
+            except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
+                log.warning("%s could not send prompt: %s", tag, exc)
+            for line in proc.stdout:  # yields each JSONL line as soon as codex flushes it
+                raw.write(line)
+                raw.flush()
+                last_message = _handle_line(line, slug, tag, board, seen_urls) or last_message
+            proc.wait()
+        finally:  # on any error above, never leave an unsandboxed agent running
+            timer.cancel()
+            if proc.poll() is None:
+                kill_tree(proc.pid)
     pump.join(timeout=5)
     if timed_out.is_set():
         return AgentResult(spec.job, "timeout", error=f"killed after {settings.agent_timeout_minutes} min",
@@ -127,11 +134,13 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     answer = final_path.read_text(encoding="utf-8") if final_path.exists() else last_message
     log.info("%s exit code %s, final answer:\n%s", tag, proc.returncode, answer)
     try:
-        rows, notes = parse_final(answer, spec.job, spec.run_id, spec.today, seen_urls)
+        rows, notes, dropped = parse_final(answer, spec.job, spec.dims, spec.run_id, spec.today, seen_urls)
     except ValueError as exc:
         reason = board.data["agents"][slug]["error"] or " | ".join(stderr_tail) or str(exc)
         return AgentResult(spec.job, "failed", error=f"exit {proc.returncode}: {reason}", attempts=attempt)
-    return AgentResult(spec.job, "done", items=rows, coverage_notes=notes, attempts=attempt)
+    if dropped:
+        log.warning("%s dropped %d item(s) filed in cells outside this batch", tag, dropped)
+    return AgentResult(spec.job, "done", items=rows, coverage_notes=notes, attempts=attempt, dropped=dropped)
 
 
 def _handle_line(line: str, slug: str, tag: str, board: StatusBoard, seen_urls: set[str]) -> str | None:
@@ -151,8 +160,8 @@ def _handle_line(line: str, slug: str, tag: str, board: StatusBoard, seen_urls: 
 
 
 def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentResult:
-    """Run one topic agent with retries (none after timeouts or usage-limit/auth errors)."""
-    log.info("[%s] prompt (%d cells):\n%s", spec.job.slug, spec.job.cells, spec.prompt)
+    """Run one agent with retries (none after timeouts or usage-limit/auth errors)."""
+    log.info("[%s] %s — prompt (%d cells):\n%s", spec.job.slug, spec.job.label, len(spec.job.cells), spec.prompt)
     result = AgentResult(spec.job, "failed", error="not started")
     try:
         for attempt in range(1, settings.agent_max_retries + 2):
@@ -165,7 +174,7 @@ def run_agent(spec: AgentSpec, settings: Settings, board: StatusBoard) -> AgentR
         result = AgentResult(spec.job, "failed", error=repr(exc), attempts=result.attempts)
     write_json(spec.agent_dir / "items.json", result.items)  # partial results for the dashboard mid-run
     board.update(spec.job.slug, state=result.state, ended=now(), items=len(result.items), error=result.error,
-                 coverage_notes=result.coverage_notes)
+                 coverage_notes=result.coverage_notes, dropped=result.dropped)
     log.info("[%s] %s with %d items after %d attempt(s)", spec.job.slug, result.state, len(result.items),
              result.attempts)
     return result
