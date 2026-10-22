@@ -99,29 +99,34 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     final_path = spec.agent_dir / "final.json"
     final_path.unlink(missing_ok=True)  # -o is only written on success; never reuse a previous attempt's file
     cmd = build_command(settings, spec.agent_dir)
-    log.info("%s launching: %s", tag, subprocess.list2cmdline(cmd))
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, encoding="utf-8", errors="replace", bufsize=1)  # line-buffered text
-    board.update(slug, state="running", attempt=attempt, started=now(), pid=proc.pid)
+    last_message, seen_urls, stderr_tail = "", set(), []
     timed_out = threading.Event()
-    timer = threading.Timer(settings.agent_timeout_minutes * 60, lambda: (timed_out.set(), kill_tree(proc.pid)))
-    stderr_tail: list[str] = []
-    pump = threading.Thread(target=_pump_stderr, args=(proc.stderr, tag, stderr_tail), daemon=True)
-    timer.start()
-    pump.start()  # start reading stderr before writing stdin so neither pipe can fill up and block
-    try:
-        proc.stdin.buffer.write(spec.prompt.encode("utf-8"))  # bytes: no CRLF translation of the prompt
-        proc.stdin.close()
-    except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
-        log.warning("%s could not send prompt: %s", tag, exc)
-    last_message, seen_urls = "", set()
+    # Open the raw event file first, so a bad path fails before any process exists.
     with open(spec.agent_dir / f"events_attempt{attempt}.jsonl", "w", encoding="utf-8") as raw:
-        for line in proc.stdout:  # yields each JSONL line as soon as codex flushes it
-            raw.write(line)
-            raw.flush()
-            last_message = _handle_line(line, slug, tag, board, seen_urls) or last_message
-    proc.wait()
-    timer.cancel()
+        log.info("%s launching: %s", tag, subprocess.list2cmdline(cmd))
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace", bufsize=1)  # line-buffered text
+        timer = threading.Timer(settings.agent_timeout_minutes * 60, lambda: (timed_out.set(), kill_tree(proc.pid)))
+        timer.daemon = True  # never keeps the interpreter alive
+        pump = threading.Thread(target=_pump_stderr, args=(proc.stderr, tag, stderr_tail), daemon=True)
+        try:
+            board.update(slug, state="running", attempt=attempt, started=now(), pid=proc.pid)
+            timer.start()
+            pump.start()  # start reading stderr before writing stdin so neither pipe can fill up and block
+            try:
+                proc.stdin.buffer.write(spec.prompt.encode("utf-8"))  # bytes: no CRLF translation of the prompt
+                proc.stdin.close()
+            except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
+                log.warning("%s could not send prompt: %s", tag, exc)
+            for line in proc.stdout:  # yields each JSONL line as soon as codex flushes it
+                raw.write(line)
+                raw.flush()
+                last_message = _handle_line(line, slug, tag, board, seen_urls) or last_message
+            proc.wait()
+        finally:  # on any error above, never leave an unsandboxed agent running
+            timer.cancel()
+            if proc.poll() is None:
+                kill_tree(proc.pid)
     pump.join(timeout=5)
     if timed_out.is_set():
         return AgentResult(spec.job, "timeout", error=f"killed after {settings.agent_timeout_minutes} min",
