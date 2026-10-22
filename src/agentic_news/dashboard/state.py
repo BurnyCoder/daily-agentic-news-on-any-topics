@@ -2,8 +2,9 @@
 
 Local: `get_config` loads the workspace once per browser session; `save_config` writes it whenever it changed.
 `stable_editor` wraps st.data_editor so its *input* stays fixed between reruns — Streamlit keeps edits as
-edited_rows/added_rows/deleted_rows relative to the input data, so feeding the edited output back in would
-re-apply them (https://docs.streamlit.io/develop/concepts/design/dataframes); `reset_editor`
+edited_rows/added_rows/deleted_rows whose row positions refer to the original input
+(https://docs.streamlit.io/develop/api-reference/data/st.data_editor), so feeding the edited output back in
+would re-apply them; `reset_editor`
 re-snapshots the input after a programmatic change (bulk edit, new dimension).
 Global context: every section reads and mutates the same RunConfig object, then calls save_config.
 """

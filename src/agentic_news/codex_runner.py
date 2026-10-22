@@ -3,7 +3,7 @@
 Local: `build_command` assembles the CLI flags (https://learn.chatgpt.com/docs/non-interactive-mode,
 `codex exec --help`); `run_agent` starts the process with the prompt on stdin, streams stdout JSONL line by
 line into the log, raw event file and StatusBoard, enforces a timeout by killing the whole process tree
-(psutil, https://psutil.readthedocs.io/en/latest/#kill-process-tree), and validates the final answer with retries.
+(psutil, https://psutil.io/recipes/#controlling-processes), and validates the final answer with retries.
 `run_agents` runs agents in a thread pool: each worker just blocks on its own subprocess
 (https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor).
 Global context: called by pipeline.run_pipeline; results feed the dashboard's table.
@@ -97,7 +97,9 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
     """One attempt: run codex to completion (or timeout) and parse its final answer."""
     slug, tag = spec.job.slug, f"[{spec.job.slug}#{attempt}]"
     final_path = spec.agent_dir / "final.json"
-    final_path.unlink(missing_ok=True)  # -o is only written on success; never reuse a previous attempt's file
+    # In --json mode -o is written only when the turn completes (codex-rs/exec/src/event_processor_with_jsonl_output.rs
+    # in openai/codex rust-v0.163.0), so never reuse a previous attempt's file.
+    final_path.unlink(missing_ok=True)
     cmd = build_command(settings, spec.agent_dir)
     last_message, seen_urls, stderr_tail = "", set(), []
     timed_out = threading.Event()
@@ -114,7 +116,8 @@ def _run_once(spec: AgentSpec, settings: Settings, board: StatusBoard, attempt: 
             timer.start()
             pump.start()  # start reading stderr before writing stdin so neither pipe can fill up and block
             try:
-                proc.stdin.buffer.write(spec.prompt.encode("utf-8"))  # bytes: no CRLF translation of the prompt
+                # bytes: text-mode stdin would turn "\n" into os.linesep ("\r\n" on Windows), per the subprocess docs
+                proc.stdin.buffer.write(spec.prompt.encode("utf-8"))
                 proc.stdin.close()
             except OSError as exc:  # codex exited early (e.g. bad flag) — its stderr explains why
                 log.warning("%s could not send prompt: %s", tag, exc)
