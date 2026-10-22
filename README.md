@@ -64,9 +64,10 @@ Everything is editable in the dashboard and in code (`catalog.default_dimensions
    - limits: up to `ITEMS_PER_CELL` items per cell, at most `MAX_ITEMS_PER_AGENT` per agent.
 2. **Schema.** It writes a JSON Schema with one enum field per dimension, limited to the batch's entries. It is
    passed to `codex exec --output-schema`, so the model answers in that exact shape.
-3. **Agent.** It starts `codex exec` (unsandboxed, live web search, prompt on stdin). Every Codex event (searches,
-   opened pages, commands, messages, token usage) streams in full to the terminal and `logs/run_<id>.log`;
-   counters and the latest event go to a live status file.
+3. **Agent.** It starts `codex exec` (unsandboxed, live web search, prompt on stdin). Every completed Codex item
+   (searches, opened pages, commands, messages) and every turn event (token usage) streams in full to the terminal
+   and `logs/run_<id>.log`; the raw event lines, including started/updated states, are kept per attempt in
+   `events_attempt<N>.jsonl`. Counters and the latest event go to a live status file.
 4. **Checks.** It validates the final JSON and drops:
    - non-http(s) and duplicate links;
    - items filed in cells this agent was not asked for (counted as "off-grid dropped").
@@ -77,8 +78,8 @@ Everything is editable in the dashboard and in code (`catalog.default_dimensions
      were recalled by the model or copied from page text, and are unverified.
 5. **Results.** It merges all rows into `runs/<id>/results.json` and `.csv`. Each row has every dimension's id
    and readable label. The dashboard shows them as a grid
-   whose rows and columns are dimensions you choose, with item counts per cell. Select rows, columns or cells to
-   list their items.
+   whose rows and columns are dimensions you choose, with item counts summed over the dimensions not on the grid.
+   Select rows, columns or cells to list their items.
 
 Measured behaviour of real runs is in [docs/codex-exec-notes.md](docs/codex-exec-notes.md). Three examples:
 - **Split vs merged, 2 cells** (one topic, last day/last week): split took 2 parallel one-cell agents, 13 s;
@@ -93,8 +94,8 @@ Measured behaviour of real runs is in [docs/codex-exec-notes.md](docs/codex-exec
 
 Requirements:
 - [uv](https://docs.astral.sh/uv/) (it installs Python 3.14 from `.python-version` if needed)
-- [Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode) **≥ 0.163.0**, logged in (`codex login`),
-  with access to `gpt-6-luna`
+- [Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode) **0.163.0** (the tested version; after an
+  update, `uv run pytest -m cli` checks it), logged in (`codex login`), with access to `gpt-6-luna`
 
 Tested on Windows 11.
 
@@ -123,7 +124,8 @@ Open http://localhost:8501. Optional: `cp .env.example .env` and edit the defaul
 1. **Dimensions and entries** (expander):
    - The dimensions table edits key, label, description, kind and order. Renaming a key carries the rules and
      merge choices over to it.
-   - Ids and keys are made from labels when left empty and kept unique (a second "Region" becomes `region_2`).
+   - Entry ids are made from labels when left empty, new dimension keys from their labels; both are kept unique
+     (a second "Region" dimension gets the key `region_2`).
    - *Add a dimension* creates a new one (it starts empty, so add its entries next).
    - *Remove a dimension* and *Reset all dimensions to defaults*.
    - *Edit entries of* opens any dimension's entries: add, rename or remove them, with definitions and days back
@@ -181,7 +183,8 @@ and [.env.example](.env.example) documents each one.
 | `AGENT_TIMEOUT_MINUTES` / `AGENT_MAX_RETRIES` | `30` / `1` | per-attempt kill timer / extra attempts (none after timeouts, usage-limit or auth errors) |
 | `ITEMS_PER_CELL` / `MAX_ITEMS_PER_AGENT` | `2` / `60` | coverage limits written into the prompt |
 | `CONFIRM_ABOVE_AGENTS` | `30` | the dashboard asks for confirmation above this many agents |
-| `CODEX_IGNORE_USER_CONFIG`, `CODEX_DISABLE_FEATURES`, `CODEX_CMD` | see `.env.example` | how Codex is launched |
+| `CODEX_REASONING_SUMMARY`, `CODEX_IGNORE_USER_CONFIG`, `CODEX_DISABLE_FEATURES`, `CODEX_CMD` | see `.env.example` | how Codex is launched |
+| `RUNS_DIR`, `LOGS_DIR`, `DATA_DIR` | `runs`, `logs`, `data` | output folders, relative to the project root |
 
 ## Features
 
@@ -213,8 +216,8 @@ and [.env.example](.env.example) documents each one.
 - **Results:** pivot grid with any dimensions on rows/columns, cell/row/column drill-down, filters, text search,
   coverage notes, CSV.
 - **Headless CLI** for scheduled daily runs.
-- **Tests:** 52 unit/end-to-end/UI tests on a fake Codex executable, 3 contract tests against the installed CLI,
-  and 2 opt-in live tests on 2 cells.
+- **Tests:** 52 unit, end-to-end and UI tests (the end-to-end ones run a fake Codex executable), 3 contract tests
+  against the installed CLI, and 2 opt-in live tests on 2 cells.
 
 ## Technologies
 
