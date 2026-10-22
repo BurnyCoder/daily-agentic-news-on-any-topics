@@ -66,6 +66,20 @@ def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+def unique_name(stem: str, taken: set[str], sep: str = "-") -> str:
+    """`stem`, else stem-2, stem-3, ... — the first name not in `taken` (keeps ids, keys and slugs unique)."""
+    name, n = stem, 1
+    while name in taken:
+        n += 1
+        name = f"{stem}{sep}{n}"
+    return name
+
+
+def rename_keys(rules: list[dict], merge: list[str], renames: dict[str, str]) -> tuple[list[dict], list[str]]:
+    """Carry rule columns and merge choices over to renamed dimension keys (old key -> new key)."""
+    return ([{renames.get(k, k): v for k, v in r.items()} for r in rules], [renames.get(k, k) for k in merge])
+
+
 def default_dimensions() -> list[Dimension]:
     """The built-in five dimensions; users can edit, remove or add to them."""
     return [
@@ -106,7 +120,7 @@ def validate_dimensions(dims: list[Dimension]) -> list[str]:
     for d in dims:
         if not d.key or d.key != slugify(d.key).replace("-", "_"):
             errors.append(f"dimension key {d.key!r} must be lowercase letters, digits or _")
-        if d.key in RESERVED_KEYS:
+        if d.key in RESERVED_KEYS or d.key.endswith("_label"):  # *_label columns hold readable labels
             errors.append(f"dimension key {d.key!r} is reserved")
         if keys.count(d.key) > 1:
             errors.append(f"duplicate dimension key {d.key!r}")
@@ -193,11 +207,7 @@ def build_jobs(cells: list[Cell], dims: list[Dimension], merge: list[str], max_c
         base = " · ".join(dims[i].option(v).label for i, v in zip(split, key)) or "all cells"
         for n, chunk in enumerate(chunks, 1):
             label = f"{base} (part {n}/{len(chunks)})" if len(chunks) > 1 else base
-            slug = stem = (slugify(label) or "job")[:60]  # keeps agent file paths under Windows' 260-char limit
-            suffix = 1
-            while slug in slugs:  # labels that slugify alike get a numeric suffix
-                suffix += 1
-                slug = f"{stem}-{suffix}"
+            slug = unique_name((slugify(label) or "job")[:60], slugs)  # ≤60 chars keeps Windows paths short
             slugs.add(slug)
             jobs.append(Job(slug=slug, label=label, cells=tuple(chunk)))
     return jobs
