@@ -56,7 +56,8 @@ def test_schema_is_valid_strict_and_generated_from_dimensions() -> None:
     _assert_strict(schema)
     props = schema["properties"]["items"]["items"]["properties"]
     assert props["topic"]["enum"] == ["physics"] and props["interval"]["enum"] == ["day", "year"]
-    assert list(props)[:5] == ALL and result_columns(DIMS)[:6] == [*ALL, "title"]
+    assert list(props)[:5] == ALL
+    assert result_columns(DIMS)[:11] == [*ALL, *[f"{k}_label" for k in ALL], "title"]  # ids, labels, item fields
 
 
 def test_parse_final_adds_metadata_filters_and_flags_dates() -> None:
@@ -77,6 +78,7 @@ def test_parse_final_adds_metadata_filters_and_flags_dates() -> None:
                                         "https://example.org/old", "https://example.org/month",
                                         "https://example.org/unknown"]
     assert rows[0]["topic"] == "physics" and rows[0]["run_id"] == "r1" and rows[0]["agent"] == JOB.slug
+    assert rows[0]["topic_label"] == "Physics" and rows[1]["interval_label"] == "Last year"  # readable labels
     assert [r["interval"] for r in rows] == ["day", "year", "day", "year", "day"]
     assert [r["in_interval"] for r in rows] == [True, True, False, True, None]
     assert [r["url_seen"] for r in rows] == [True, False, False, True, False]

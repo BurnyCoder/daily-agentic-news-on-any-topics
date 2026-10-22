@@ -21,7 +21,7 @@ specifics and live-run measurements are in [codex-exec-notes.md](codex-exec-note
 | Module | Responsibility | I/O |
 |---|---|---|
 | `settings.py` | `.env` + environment → frozen `Settings` (`dotenv_values`, never writes `os.environ`); `apply_overrides` for per-run UI values | reads `.env` |
-| `catalog.py` | dimensions/options/cells, `default_dimensions`, `validate_dimensions`, `default_rules`, `sync_rules` ("all stays all"), `expand_rules`, `build_jobs`, `interval_ranges` | none |
+| `catalog.py` | dimensions/options/cells, `default_dimensions`, `validate_dimensions`, `default_rules`, `sync_rules` ("all stays all"), `rename_keys`, `unique_name`, `expand_rules`, `build_jobs`, `interval_ranges` | none |
 | `config.py` | `RunConfig`, `default_config`, JSON round-trip | none |
 | `prompts.py` | `build_prompt(job, dims, ...)`: dimension blocks with used entries, cells (product or list), search plan, editable rules, output contract | none |
 | `schema.py` | `build_output_schema(job, dims)` (one enum per dimension, strict subset); `parse_final` (validate, drop unsafe/duplicate links and off-grid items, re-file dates, flags); `result_columns(dims)` | none |
@@ -93,7 +93,9 @@ The launcher writes a `starting` status before the run process exists; the run's
 
 ## Result columns
 
-`result_columns(dims)` = one column per dimension (option ids; the UI maps them to labels), then:
+`result_columns(dims)` starts with one column per dimension (option ids), then one `<key>_label` column per
+dimension (readable labels, so the CSV is self-explanatory). Dimension keys ending in `_label` are therefore
+rejected by validation. The dashboard maps ids to labels itself and hides the `_label` columns. Then:
 
 | Column | Source | Meaning |
 |---|---|---|

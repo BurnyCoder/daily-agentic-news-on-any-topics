@@ -97,3 +97,48 @@ def test_bulk_edit_leaves_topics_alone_by_default(fake_env: Path) -> None:
     next(b for b in at.button if b.label == "Apply entries to checked rows").click().run()
     rules = read_json(fake_env / "data" / "workspace.json")["rules"]
     assert [(r["topic"], r["interval"]) for r in rules] == [(["physics"], ["week"]), (["llms"], ["week"])]
+
+
+def test_merge_choice_changes_the_agent_count(fake_env: Path) -> None:
+    """Choosing dimensions to merge in the UI regroups the same cells into fewer agents and is saved."""
+    write_json(fake_env / "data" / "workspace.json", config_to_dict(make_config("Physics", intervals=("day", "week"),
+                                                                                merge=[])))
+    at = _app()
+    assert "**2** cell(s) → **2** agent(s)" in _markdown(at)
+    at.multiselect(key="merge").set_value(["interval"]).run()
+    assert "**2** cell(s) → **1** agent(s)" in _markdown(at)
+    assert read_json(fake_env / "data" / "workspace.json")["merge"] == ["interval"]
+
+
+def test_agents_section_shows_live_status(fake_env: Path) -> None:
+    """The Agents section lists each agent's label, state and counters from status.json."""
+    run_dir = fake_env / "runs" / "20261022-100000"
+    write_json(run_dir / "status.json", {"run_id": "20261022-100000", "state": "done", "pid": 0, "started": "t",
+                                         "agents": {"physics": {"label": "Physics · Last day", "cells": 2,
+                                                                "state": "done", "attempt": 1, "searches": 3,
+                                                                "items": 2, "dropped": 1, "input_tokens": 10,
+                                                                "output_tokens": 5, "last_event": "turn completed",
+                                                                "error": ""}}})
+    at = _app()
+    assert "1/1 agents finished" in _markdown(at)
+    table = next(d.value for d in at.dataframe if "agent" in d.value.columns)
+    assert table.iloc[0]["agent"] == "Physics · Last day" and table.iloc[0]["off-grid dropped"] == 1
+
+
+def test_adding_a_dimension_twice_keeps_keys_unique(fake_env: Path) -> None:
+    """A second dimension with the same label gets a suffixed key instead of a duplicate."""
+    at = _app()
+    for _ in range(2):
+        next(t for t in at.text_input if t.label == "Label").set_value("Region")
+        next(b for b in at.button if b.label == "Add dimension").click().run()
+    keys = [d["key"] for d in read_json(fake_env / "data" / "workspace.json")["dimensions"]]
+    assert keys[-2:] == ["region", "region_2"]
+
+
+def test_bulk_apply_follows_dimension_changes(fake_env: Path) -> None:
+    """After a dimension is added, bulk edit applies to it too (all dimensions except the first)."""
+    at = _app()
+    next(t for t in at.text_input if t.label == "Label").set_value("Audience level")
+    next(b for b in at.button if b.label == "Add dimension").click().run()
+    apply_to = next(m for m in at.multiselect if m.label == "Apply these dimensions")
+    assert apply_to.value == ["interval", "type", "source", "variant", "audience_level"]

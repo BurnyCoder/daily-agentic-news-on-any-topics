@@ -65,7 +65,8 @@ def render_results(settings: Settings) -> None:
     cfg = config_from_dict(snapshot) if snapshot else None  # runs from older versions have no snapshot
     dims = cfg.dimensions if cfg else default_dimensions()
     keys = [d.key for d in dims]
-    df = pd.DataFrame(load_results(run_dir), columns=result_columns(dims))
+    shown = [c for c in result_columns(dims) if not c.endswith("_label")]  # ids are mapped to labels in place below
+    df = pd.DataFrame(load_results(run_dir), columns=shown)
     cells = pd.DataFrame(expand_rules(cfg.rules, dims) if cfg else df[keys].drop_duplicates(), columns=keys)
     for d in dims:  # ids -> readable labels in items and cells, kept in entry order
         df[d.key], cells[d.key] = _ordered(df[d.key], d), _ordered(cells[d.key], d)
