@@ -25,11 +25,13 @@ uv run agentic-news run [--config FILE]   # headless run of data/workspace.json 
   through `store.py`.
 - `app.py` only calls the `dashboard/` sections; sections read run files and call `launcher.py`, never run agents.
 - In the dashboard, data editors use `state.stable_editor` (input snapshotted until `reset_editor`) and widgets
-  use keys seeded once; never feed an editor's output back as its input.
+  use keys seeded once; never feed an editor's output back as its input. The one deliberate exception is bulk
+  edit's "Apply these dimensions" picker, which has no key so it resets when the dimensions change.
 - Every prompt, Codex event and final answer must keep reaching the run log untruncated (`logging_setup.py`);
   only the UI may shorten text.
 - The output schema must stay valid for OpenAI strict structured outputs (object root, every property
-  required, `additionalProperties: false`, no length/format keywords); `tests/test_schema.py` enforces it.
+  required, `additionalProperties: false`) and inside our conservative subset (no length, format, pattern or
+  item-count keywords, although strict mode accepts some of them); `tests/test_schema.py` enforces both.
 - Changing a Codex flag, feature name or model? Run `uv run pytest -m cli` and `uv run pytest -m live -s`.
   Live tests must stay tiny (a few cells): never test the full cell space.
 - Tests first: the fake Codex (`tests/fixtures/fake_codex.py`, behaviour chosen by `MODE=<name>` in the prompt,

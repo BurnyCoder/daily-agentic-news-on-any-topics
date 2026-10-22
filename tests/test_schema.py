@@ -1,7 +1,8 @@
 """Tests for schema.py — the JSON Schema passed to `codex exec --output-schema` and parsing of the answer.
 
 Global context: Codex sends the schema in OpenAI strict Structured Outputs mode, which only accepts a
-subset of JSON Schema (https://developers.openai.com/api/docs/guides/structured-outputs#supported-schemas);
+subset of JSON Schema (https://developers.openai.com/api/docs/guides/structured-outputs#supported-schemas)
+— and we stay inside a smaller subset still (no length/format/pattern/item-count keywords);
 an incompatible schema makes every agent fail, so the strict rules are checked here without spending tokens.
 The schema and parsing are generated from the user-editable dimensions.
 """
@@ -18,7 +19,7 @@ from agentic_news.schema import build_output_schema, parse_final, result_columns
 DIMS = default_dimensions()
 ALL = [d.key for d in DIMS]
 TODAY = date(2026, 10, 22)
-BANNED = {"minLength", "maxLength", "minItems", "maxItems", "format", "pattern"}  # risky in strict mode
+BANNED = {"minLength", "maxLength", "minItems", "maxItems", "format", "pattern"}  # outside our conservative subset
 RULE = {"run": True, "topic": ["physics"], "interval": ["day", "year"], "type": ["paper", "video"],
         "source": ["viral_news"], "variant": ["pop_sci", "rigorous"]}
 [JOB] = build_jobs(expand_rules([RULE], DIMS), DIMS, merge=ALL, max_cells=0)  # 2 x 2 x 1 x 2 = 8 cells

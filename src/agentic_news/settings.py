@@ -27,7 +27,7 @@ class Settings:
     codex_cmd: tuple[str, ...] = ("codex",)  # argv prefix that launches Codex (a fake script in tests)
     codex_model: str = "gpt-6-luna"  # slug from `codex debug models`
     codex_reasoning_effort: str = "medium"  # gpt-6-luna supports low|medium|high|xhigh|max
-    codex_reasoning_summary: str = "auto"  # makes reasoning summaries appear in the JSONL stream/logs
+    codex_reasoning_summary: str = "auto"  # gpt-6-luna's default is "none" (`codex debug models`): no reasoning logged
     codex_web_search: str = "live"  # https://learn.chatgpt.com/docs/config-file/config-basic.md
     codex_ignore_user_config: bool = True  # skip ~/.codex/config.toml (e.g. MCP servers) for news agents
     codex_disable_features: tuple[str, ...] = (  # names from `codex features list`
@@ -35,12 +35,12 @@ class Settings:
     max_parallel_agents: int = 6  # thread-pool size = concurrent Codex processes
     agent_timeout_minutes: float = 30.0  # per-attempt wall clock before the process tree is killed
     agent_max_retries: int = 1  # extra attempts after a failure/invalid answer
-    items_per_cell: int = 2  # items requested per interval x type x source x variant
+    items_per_cell: int = 2  # items requested per cell (one entry of every dimension)
     max_items_per_agent: int = 60  # cap on one agent's answer size
     confirm_above_agents: int = 30  # dashboard asks for explicit confirmation above this many agents
     runs_dir: Path = Path("runs")  # per-run folders (status, results, per-agent artifacts)
     logs_dir: Path = Path("logs")  # timestamped run logs
-    data_dir: Path = Path("data")  # dashboard's saved topic selection
+    data_dir: Path = Path("data")  # dashboard's saved workspace (workspace.json)
 
 
 def _convert(raw: str, default: object, root: Path) -> object:
