@@ -70,6 +70,19 @@ def test_default_and_synced_rules_follow_dimensions() -> None:
     assert all(r["region"] == ["eu", "us"] for r in synced)  # new dimension starts fully selected
 
 
+def test_all_stays_all_when_entries_are_added() -> None:
+    """Rules that selected every entry of a dimension also get its new entries; partial selections stay partial."""
+    empty = replace(REGION, options=())  # a dimension added from the UI starts empty
+    rules = sync_rules([{**_rule(), "region": []}, {**_rule(), "interval": ["day"]}], [*DIMS, empty])
+    grown_interval = replace(DIMS[1], options=DIMS[1].options + (Option("fortnight", "Last 2 weeks", "", 14),))
+    synced = sync_rules(rules, [DIMS[0], grown_interval, *DIMS[2:], REGION], previous=[*DIMS, empty])
+    assert [r["region"] for r in synced[:2]] == [["eu", "us"], ["eu", "us"]]  # empty-before = all-before
+    assert synced[0]["interval"] == ["day"] and synced[1]["interval"] == ["day"]  # partial stays partial
+    full = sync_rules([_rule(interval=[o.id for o in DIMS[1].options])], [DIMS[0], grown_interval, *DIMS[2:]],
+                      previous=DIMS)
+    assert full[0]["interval"][-1] == "fortnight"  # had all intervals -> gets the new one
+
+
 def test_build_jobs_split_merge_and_cap() -> None:
     """No merge = one agent per cell; merged dims share an agent; the cap splits big groups."""
     cells = expand_rules([_rule(topic=["physics", "pure-math"], interval=["day", "week"], type=["paper", "book"])],
