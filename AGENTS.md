@@ -21,8 +21,9 @@ uv run agentic-news run [--config FILE]   # headless run of data/workspace.json 
   put the logic in its own module.
 - Nothing may assume a fixed set of dimensions: prompts, schema, results and UI are generated from
   `RunConfig.dimensions` (any number, user-editable). Built-in defaults live in `catalog.default_dimensions`.
-- Keep `catalog.py`, `config.py`, `prompts.py`, `schema.py`, `events.py` free of I/O; all file access goes
-  through `store.py`.
+- Keep `catalog.py`, `config.py`, `prompts.py`, `schema.py`, `events.py` free of I/O. Run and workspace JSON goes
+  through `store.py`; the only other file access is `.env` (`settings.py`), the run log (`logging_setup.py`),
+  agent folders and `prompt.md` (`pipeline.py`), and event files and `final.json` (`codex_runner.py`).
 - `app.py` only calls the `dashboard/` sections; sections read run files and call `launcher.py`, never run agents.
 - In the dashboard, data editors use `state.stable_editor` (input snapshotted until `reset_editor`) and widgets
   use keys seeded once; never feed an editor's output back as its input. The one deliberate exception is bulk
