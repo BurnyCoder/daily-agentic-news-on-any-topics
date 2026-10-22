@@ -89,3 +89,30 @@ def test_run_agents_in_parallel(tmp_path: Path) -> None:
     board = StatusBoard(tmp_path / "status.json", "r1", [s.job for s in specs])
     results = run_agents(specs, Settings(codex_cmd=FAST.codex_cmd, max_parallel_agents=2), board)
     assert [r.job.slug for r in results] == ["a", "b", "c"] and all(r.state == "done" for r in results)
+
+
+def test_error_after_launch_kills_the_agent_at_once(tmp_path: Path) -> None:
+    """An exception after Popen (here: the status board) kills the agent instead of waiting for the timeout."""
+    class BrokenBoard(StatusBoard):
+        def update(self, slug: str, **fields: object) -> None:
+            if fields.get("state") == "running":
+                raise RuntimeError("status write failed")
+            super().update(slug, **fields)
+
+    spec = _spec(tmp_path, "hang")
+    settings = Settings(codex_cmd=FAST.codex_cmd, agent_timeout_minutes=10, agent_max_retries=0)
+    started = time.monotonic()
+    result = run_agent(spec, settings, BrokenBoard(tmp_path / "status.json", "r1", [spec.job]))
+    assert result.state == "failed" and "status write failed" in result.error
+    assert time.monotonic() - started < 10  # not the 10-minute timeout
+    leftovers = [p for p in psutil.Process().children(recursive=True) if "fake_codex" in " ".join(p.cmdline())]
+    assert leftovers == []  # the agent process was killed, not orphaned
+
+
+def test_missing_agent_folder_fails_before_launching(tmp_path: Path) -> None:
+    """A bad agent path fails before any codex process is started."""
+    spec = _spec(tmp_path, "ok")
+    spec = AgentSpec(job=spec.job, dims=DIMS, agent_dir=tmp_path / "missing", prompt=spec.prompt, run_id="r1",
+                     today=spec.today)
+    result = run_agent(spec, FAST, StatusBoard(tmp_path / "status.json", "r1", [spec.job]))
+    assert result.state == "failed" and "FileNotFoundError" in result.error

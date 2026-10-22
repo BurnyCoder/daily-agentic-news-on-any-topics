@@ -183,7 +183,7 @@ def build_jobs(cells: list[Cell], dims: list[Dimension], merge: list[str], max_c
         base = " · ".join(dims[i].option(v).label for i, v in zip(split, key)) or "all cells"
         for n, chunk in enumerate(chunks, 1):
             label = f"{base} (part {n}/{len(chunks)})" if len(chunks) > 1 else base
-            slug = stem = (slugify(label) or "job")[:80]  # short enough for Windows paths
+            slug = stem = (slugify(label) or "job")[:60]  # keeps agent file paths under Windows' 260-char limit
             suffix = 1
             while slug in slugs:  # labels that slugify alike get a numeric suffix
                 suffix += 1
