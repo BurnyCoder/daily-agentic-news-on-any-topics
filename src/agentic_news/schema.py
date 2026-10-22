@@ -4,10 +4,11 @@ Local: `build_output_schema` emits one enum field per (user-editable) dimension 
 OpenAI strict Structured Outputs (object root, every property required, `additionalProperties: false` —
 https://developers.openai.com/api/docs/guides/structured-outputs#supported-schemas). We also avoid length,
 format, pattern and item-count keywords: minLength/maxLength are not in that page's supported list, and the rest
-are not needed. Codex exec sends the schema with strict=true
-(https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/codex-api/src/common.rs#L392-L410, asserted in
-codex-rs/exec/tests/suite/output_schema.rs). Per-dimension enums allow combinations outside an irregular batch,
-so `parse_final` drops items whose cell is not in the batch. It also re-validates in Python (the fallback answer
+are not needed. Codex exec sends the schema with strict=true: `output_schema_strict` is true except for Guardian
+sessions (https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/src/session/turn.rs#L1690-L1692) and is
+passed as `strict` (codex-rs/codex-api/src/common.rs#L392-L410); codex-rs/exec/tests/suite/output_schema.rs#L51-L59
+asserts `"strict": true` (that test is skipped on Windows). Per-dimension enums allow combinations outside an
+irregular batch, so `parse_final` drops items whose cell is not in the batch. It also re-validates in Python (the fallback answer
 — the last agent_message, used when no -o file was written — may not match the schema), drops unsafe links and
 duplicates, re-files mis-dated items (interval dimension only, and only onto cells of the batch) and adds metadata.
 Global context: rows returned here, one per item and each in exactly one cell, feed the dashboard's results.

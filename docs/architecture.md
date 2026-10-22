@@ -27,8 +27,9 @@ specifics and live-run measurements are in [codex-exec-notes.md](codex-exec-note
 | `schema.py` | `build_output_schema(job, dims)` (one enum per dimension, strict subset); `parse_final` (validate, drop unsafe/duplicate links and off-grid items, re-file dates, flags); `result_columns(dims)` | none |
 | `events.py` | render Codex JSONL events as full log text, counters, searched URLs, fatal-error check | none |
 | `store.py` | atomic JSON (Windows `PermissionError` retry), results JSON/CSV, `list_runs`, thread-safe `StatusBoard` | `runs/`, `data/` |
-| `codex_runner.py` | build the `codex exec` argv, run one process per batch, stream events, timeout + process-tree kill, kill on any error after launch, retries, thread pool | agent folders |
-| `pipeline.py` | **the wrapper**: `load_config → expand_rules → build_jobs → prepare_agent_dirs → run_agents → collect_results → save_results` | via `store` |
+| `codex_runner.py` | build the `codex exec` argv, run one process per batch, stream events, timeout + process-tree kill, kill on any error after launch, retries, thread pool | event files, `final.json`; JSON via `store` |
+| `pipeline.py` | **the wrapper**: `load_config → expand_rules → build_jobs → prepare_agent_dirs → run_agents → collect_results → save_results` | agent folders, `prompt.md`; JSON via `store` |
+| `logging_setup.py` | one UTF-8 log file per run plus the terminal, untruncated | `logs/` |
 | `cli.py` | `agentic-news run [--run-id] [--config]`; writes a failed status if the run crashes | — |
 | `launcher.py` | start the CLI in the background with a config snapshot, `is_active`, `stop_run` | `runs/` |
 | `dashboard/state.py` | workspace in session state, saved to `data/workspace.json`; `stable_editor`/`reset_editor` | `data/` |
