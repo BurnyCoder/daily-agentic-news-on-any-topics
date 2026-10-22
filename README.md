@@ -33,7 +33,7 @@ defaults give 24 × 6 × 5 × 4 × 2 = 5,760 cells, and every cell gets its own 
 Everything is editable in the dashboard and in code (`catalog.default_dimensions`):
 - add, rename or remove **entries** of any dimension;
 - add, reorder or remove **whole dimensions**. For example, "Region" with entries Europe/USA doubles the cells.
-  A dimension of kind `interval` gets date ranges and date checks.
+  A dimension of kind `interval` (at most one) gets date ranges and date checks.
 
 **What runs.** The "What to run" table holds *rules*:
 - each checked row selects every combination of the entries it lists, one multiselect column per dimension;
@@ -65,27 +65,29 @@ Everything is editable in the dashboard and in code (`catalog.default_dimensions
 2. **Schema.** It writes a JSON Schema with one enum field per dimension, limited to the batch's entries. It is
    passed to `codex exec --output-schema`, so the model answers in that exact shape.
 3. **Agent.** It starts `codex exec` (unsandboxed, live web search, prompt on stdin). Every Codex event (searches,
-   opened pages, commands, messages, token usage) streams in full to the terminal, `logs/run_<id>.log` and a live
-   status file.
+   opened pages, commands, messages, token usage) streams in full to the terminal and `logs/run_<id>.log`;
+   counters and the latest event go to a live status file.
 4. **Checks.** It validates the final JSON and drops:
    - non-http(s) and duplicate links;
    - items filed in cells this agent was not asked for (counted as "off-grid dropped").
 
    An item whose date falls in another selected interval of the batch moves there. Each row is flagged with:
    - **Date in range:** the publication date lies inside the interval;
-   - **Link from search:** the URL appeared in the agent's own web-search results; other links came from the
-     model's memory and are unverified.
+   - **Link from search:** the URL appeared in the agent's own web-search results or opened pages; other links
+     were recalled by the model or copied from page text, and are unverified.
 5. **Results.** It merges all rows into `runs/<id>/results.json` and `.csv`. Each row has every dimension's id
    and readable label. The dashboard shows them as a grid
    whose rows and columns are dimensions you choose, with item counts per cell. Select rows, columns or cells to
    list their items.
 
-Measured behaviour of real runs is in [docs/codex-exec-notes.md](docs/codex-exec-notes.md). Two examples:
+Measured behaviour of real runs is in [docs/codex-exec-notes.md](docs/codex-exec-notes.md). Three examples:
 - **Split vs merged, 2 cells** (one topic, last day/last week): split took 2 parallel one-cell agents, 13 s;
   merged on interval took 1 agent, 17 s. Every item landed in its own cell, inside its date range, with a link
   from search.
-- **Older one-agent-per-topic runs:** one agent covering 240 cells returned only 9–24 items. That is why the
-  default is now one agent per cell.
+- **Merged, 4 cells** (type merged into 2 agents of 2 cells, 44 s): 6 items, all in their own cells; 5/6 inside
+  the date range and 4/6 with a link from search.
+- **Older one-agent-per-topic runs:** one agent covering 240 cells returned only 9–24 items at the default
+  `medium` effort (4 at `high`). That is why the default is now one agent per cell.
 
 ## Quick start
 
@@ -148,8 +150,8 @@ Open http://localhost:8501. Optional: `cp .env.example .env` and edit the defaul
    - pick grid rows and columns (any dimensions), then select grid rows, columns or cells to list their items;
    - download a CSV and read each agent's notes on empty cells.
 
-Everything you set is saved to `data/workspace.json` on every change. Each run snapshots it to
-`runs/<id>/config.json`.
+Dimensions, rules, batching, run settings and prompt rules are saved to `data/workspace.json` on every change
+(results filters and grid choices are not). Each run snapshots the workspace to `runs/<id>/config.json`.
 
 ### Headless and daily runs
 
@@ -176,7 +178,7 @@ and [.env.example](.env.example) documents each one.
 | `CODEX_REASONING_EFFORT` | `medium` | `high` searched more but returned fewer items in our test |
 | `CODEX_WEB_SEARCH` | `live` | `live`, `cached`, `indexed` or `disabled` |
 | `MAX_PARALLEL_AGENTS` | `6` | concurrent Codex processes |
-| `AGENT_TIMEOUT_MINUTES` / `AGENT_MAX_RETRIES` | `30` / `1` | per-attempt kill timer / extra attempts (none after timeouts or usage limits) |
+| `AGENT_TIMEOUT_MINUTES` / `AGENT_MAX_RETRIES` | `30` / `1` | per-attempt kill timer / extra attempts (none after timeouts, usage-limit or auth errors) |
 | `ITEMS_PER_CELL` / `MAX_ITEMS_PER_AGENT` | `2` / `60` | coverage limits written into the prompt |
 | `CONFIRM_ABOVE_AGENTS` | `30` | the dashboard asks for confirmation above this many agents |
 | `CODEX_IGNORE_USER_CONFIG`, `CODEX_DISABLE_FEATURES`, `CODEX_CMD` | see `.env.example` | how Codex is launched |
@@ -200,7 +202,7 @@ and [.env.example](.env.example) documents each one.
   - parallelism cap;
   - per-agent timeout with process-tree kill;
   - an agent is killed at once if anything fails after launch;
-  - retries (none after timeouts or usage-limit errors);
+  - retries (none after timeouts, usage-limit or auth errors);
   - stop button;
   - partial results while a run is still going.
 - **Output checks:**
@@ -274,16 +276,17 @@ fetched web content and are git-ignored.
 ## Limitations
 
 - **Cost scales with granularity.** One agent per cell means many agents; each one-cell agent used about
-  73–77k input tokens in our runs. Merge dimensions or narrow the rules for big selections.
-  Watch the cells → agents preview.
+  73–77k input tokens in our runs, and 2-cell agents 108–263k. Merge dimensions or narrow the rules for big
+  selections. Watch the cells → agents preview.
 - **Merged batches are thinner per cell.** One agent covering 240 cells returned only 9–24 items in earlier runs
   ([docs/codex-exec-notes.md](docs/codex-exec-notes.md)).
-- **Links not from search:** links marked "no" under *Link from search* were written from the model's memory.
-  Most were real classics in our runs, but one was a placeholder. Use the filter when that matters.
+- **Links not from search:** links marked "no" under *Link from search* were recalled by the model or copied from
+  page text. Many were well-known older works in our runs, but some were wrong: a placeholder URL, a YouTube
+  search page and a fabricated journal citation. Use the filter when that matters.
 - **Virality:** `why_notable` is the model's own summary of the popularity evidence it found; the app does not
   verify it.
-- Measurements come from single runs per configuration, so they show tendencies, not statistically tested
-  differences.
+- Measurements come from single runs per configuration (one configuration was repeated once: 13 vs 15 items), so
+  they show tendencies, not statistically tested differences.
 
 ## Tests
 

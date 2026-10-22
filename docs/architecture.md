@@ -52,7 +52,10 @@ streamlit (app.py)
 
 - **Where the run lives:**
   - It shares the Streamlit terminal, so the live log is visible there.
-  - It survives browser reloads and Ctrl+C in that terminal; closing the terminal window ends it.
+  - It survives browser reloads and Ctrl+C in that terminal, because CREATE_NEW_PROCESS_GROUP disables Ctrl+C
+    for the new group ([process creation flags](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags));
+    Ctrl+Break still reaches it. Closing the terminal window ends it, because every process attached to the
+    console gets `CTRL_CLOSE_EVENT` ([HandlerRoutine](https://learn.microsoft.com/en-us/windows/console/handlerroutine)).
   - For unattended runs use the CLI directly.
 - **Reading output:** each worker thread blocks on its own subprocess and reads stdout line by line; a second
   thread drains stderr.
@@ -75,7 +78,7 @@ runs/<run_id>/
   config.json               snapshot of the RunConfig this run executed (also used for labels in results)
   status.json               live run + per-agent status (below)
   results.json, results.csv all rows, written when the run ends
-  <agent-slug>/             one folder per batch (slug ≤ 60 chars, from the batch label)
+  <agent-slug>/             one folder per batch (slug from the batch label, cut to 60 chars, -2/-3/... if taken)
     prompt.md               full prompt sent on stdin
     schema.json             --output-schema for this batch (enums = the batch's entries)
     events_attempt<N>.jsonl raw Codex JSONL, one file per attempt
@@ -106,5 +109,5 @@ rejected by validation. The dashboard maps ids to labels itself and hides the `_
 | `run_id` | Python | run that produced the row |
 
 **Re-filing:** if an item's date falls outside its interval but inside another interval *of the same batch*, it
-moves to the narrowest such interval, and only if the resulting cell was selected. Items whose cell is not in the
-batch are dropped and counted in the agent's `dropped`.
+moves to the narrowest such interval, and only if the resulting cell is one of the batch's cells. Items whose cell
+is not in the batch are dropped and counted in the agent's `dropped`.
