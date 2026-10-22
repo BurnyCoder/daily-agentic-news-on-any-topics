@@ -13,12 +13,11 @@ from pathlib import Path  # temporary run folders
 import pytest  # markers + parametrize
 
 from agentic_news.catalog import default_dimensions  # built-in dimensions
-from agentic_news.config import RunConfig  # what to run
+from agentic_news.config import RunConfig, config_to_dict  # what to run + its file form
 from agentic_news.logging_setup import setup_logging  # full log, like a real run
 from agentic_news.pipeline import run_pipeline  # the real wrapper
 from agentic_news.settings import load_settings  # the user's .env
 from agentic_news.store import read_json, write_json  # config in, results out
-from agentic_news.config import config_to_dict  # config file
 
 pytestmark = pytest.mark.live
 RULE = {"run": True, "topic": ["ai-industry"], "interval": ["day", "week"], "type": ["article"],
