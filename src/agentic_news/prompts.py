@@ -5,7 +5,7 @@ dimension with only the options this batch uses (interval options get exact date
 the cells to cover (compactly when they form a full product, else listed one by one), coverage limits, a search
 plan, the editable rules text (`DEFAULT_PROMPT_RULES` unless the user changed it) and the output contract.
 Global context: the JSON shape itself is enforced by `--output-schema` (schema.py, built from the same
-dimensions). Codex applies the output schema to every agent message
+dimensions). An open bug report says Codex applies the output schema to every agent message
 (https://github.com/openai/codex/issues/19816), hence the "no progress messages" rule.
 """
 
