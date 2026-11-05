@@ -14,6 +14,7 @@ duplicates, re-files mis-dated items (interval dimension only, and only onto cel
 Global context: rows returned here, one per item and each in exactly one cell, feed the dashboard's results.
 """
 
+import calendar  # last day of a month for partial dates
 import json  # decode the agent's final message
 from datetime import date  # today's date for the in_interval check
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit  # URL scheme check + normalization
@@ -66,7 +67,8 @@ def _in_interval(published: str, start: date, end: date) -> bool | None:
     try:
         nums = [int(p) for p in parts]
         lo = date(nums[0], nums[1] if len(nums) > 1 else 1, nums[2] if len(nums) > 2 else 1)  # period start
-        hi = date(nums[0], nums[1] if len(nums) > 1 else 12, nums[2] if len(nums) > 2 else 28)  # ~period end
+        month = nums[1] if len(nums) > 1 else 12
+        hi = date(nums[0], month, nums[2] if len(nums) > 2 else calendar.monthrange(nums[0], month)[1])  # period end
     except (ValueError, IndexError):
         return None  # "unknown" or free text
     return lo <= end and hi >= start  # overlap test: partial dates count if any part falls in range
