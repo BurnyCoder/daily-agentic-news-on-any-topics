@@ -73,7 +73,8 @@ Everything is editable in the dashboard and in code (`catalog.default_dimensions
    - items filed in cells this agent was not asked for (counted as "off-grid dropped").
 
    An item whose date falls in another selected interval of the batch moves there. Each row is flagged with:
-   - **Date in range:** the publication date lies inside the interval;
+   - **Date in range:** the publication date lies inside the interval (a partial date such as `2026-10`
+     counts if it overlaps);
    - **Link from search:** the URL appeared in the agent's own web-search results or opened pages; other links
      were recalled by the model or copied from page text, and are unverified.
 5. **Results.** It merges all rows into `runs/<id>/results.json` and `.csv`. Each row has every dimension's id
@@ -223,7 +224,7 @@ and [.env.example](.env.example) documents each one.
 
 | Component | Version |
 |---|---|
-| Python | 3.14 (managed by uv 0.13) |
+| Python | 3.14 (managed by uv; build backend `uv_build` 0.13) |
 | Codex CLI (`codex exec`) | 0.163.0 |
 | Streamlit (`st.data_editor`, `MultiselectColumn`, `st.fragment`, dataframe selections, `LinkColumn`) | 1.66.1 |
 | pandas | 3.0.6 |
