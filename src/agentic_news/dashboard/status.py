@@ -3,7 +3,8 @@
 Local: a fragment with run_every (https://docs.streamlit.io/develop/api-reference/execution-flow/st.fragment)
 re-reads runs/<latest>/status.json without rerunning the page; when the run finishes it reruns the whole app
 so the Get News button and results refresh.
-Global context: status.json is written only by the run's StatusBoard (store.py) in the background CLI process.
+Global context: status.json is written by the run's StatusBoard (store.py) in the background CLI process while the
+run is going; launcher.py writes the initial `starting` and the `stopped` states, cli.py a `failed` state on a crash.
 """
 
 import pandas as pd  # status table

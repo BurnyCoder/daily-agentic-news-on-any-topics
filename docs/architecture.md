@@ -66,7 +66,8 @@ streamlit (app.py)
   - Any exception after launch also kills the process tree, in a `finally`.
   - The raw event file is opened before launch, so a bad path fails before any process exists.
   - Timeouts and usage-limit/auth errors are not retried; other failures are retried `agent_max_retries` times.
-- **Status file:** `StatusBoard` is the only writer of `status.json`.
+- **Status file:** while the run is going, `StatusBoard` is the only writer of `status.json` (the launcher writes
+  the initial `starting` status, the CLI a `failed` status if the run crashes, and the Stop button `stopped`).
   - Writes are forced on state changes and throttled (≤1/s) for event counters.
   - The dashboard polls it every 2 s.
 - **Stop:** the dashboard button kills the run's process tree (all agents) and marks the run `stopped`.
