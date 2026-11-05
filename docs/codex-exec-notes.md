@@ -64,8 +64,9 @@ Setup for every run:
 - data comes from `runs/<id>/status.json`, `events_attempt1.jsonl` and `items.json`
 
 Each configuration ran once, except run 5's prompt on Pure math, which ran twice (5 and 5b: 13 vs 15 items,
-8 vs 11 links from search). That replicate is the only measure of run-to-run noise, and it is as large as most
-differences between rows, so the differences are indicative only; none is statistically tested.
+8 vs 11 links from search). That replicate is the only measure of run-to-run noise. It is smaller than the differences between
+consecutive Pure math rows (2 vs 4–13 items), but one pair cannot estimate the noise, so the differences are
+indicative only; none is statistically tested.
 
 **Pure math**
 
