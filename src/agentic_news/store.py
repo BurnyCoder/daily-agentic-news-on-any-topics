@@ -2,8 +2,8 @@
 
 Local: JSON is written atomically (temp file + `os.replace`, https://docs.python.org/3/library/os.html#os.replace).
 On Windows `os.replace` raises PermissionError while the target is open elsewhere (here: the dashboard reading
-status.json; https://github.com/python/cpython/issues/90161 reports it for any open handle), so writes retry
-briefly. StatusBoard is the single writer of status.json for a run.
+status.json; in https://github.com/python/cpython/issues/90161 a core developer explains that MoveFileExW
+refuses a destination that is already open, even with delete sharing), so writes retry briefly. StatusBoard is the single writer of status.json for a run.
 Global context: layout is runs/<run_id>/{config.json, status.json, results.json, results.csv, <agent>/...}
 and data/workspace.json; the CLI writes run files, the Streamlit dashboard reads them and edits the workspace.
 """
