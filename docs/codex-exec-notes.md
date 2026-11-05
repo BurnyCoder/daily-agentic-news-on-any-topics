@@ -27,7 +27,7 @@ codex exec --json --color never --model gpt-6-luna
 | `--skip-git-repo-check` | agent folders are not repositories |
 | `--ignore-user-config` | does not load `$CODEX_HOME/config.toml` (e.g. personal MCP servers); "auth still uses `CODEX_HOME`" per `codex exec --help` (`CODEX_IGNORE_USER_CONFIG=false` to turn off) |
 | `--disable ...` | turns off the plugin, app, tool-suggestion and multi-agent (sub-agent) features for news agents; each flag equals `-c features.<name>=false` (`codex exec --help`), and the names are listed by `codex features list` |
-| `--output-schema` | strict JSON answer; Codex applies it to **every** agent message, not just the last ([openai/codex#19816](https://github.com/openai/codex/issues/19816)), hence the prompt's "no progress messages" rule |
+| `--output-schema` | strict JSON answer; an open bug report says Codex applies it to **every** agent message, not just the last ([openai/codex#19816](https://github.com/openai/codex/issues/19816)), hence the prompt's "no progress messages" rule |
 | `-o` + trailing `-` | final answer in a file; prompt read from stdin (avoids Windows quoting and command-line length limits) |
 
 All `-c` keys above pass `--strict-config`, which does check `-c` overrides: a made-up key fails with
